@@ -10,6 +10,11 @@ export interface Entry {
 
 const HOUR = 3600_000;
 
+/** Today's date in IST (the app's time zone), YYYY-MM-DD. */
+export function istToday(): string {
+  return new Date(Date.now() + 5.5 * HOUR).toISOString().slice(0, 10);
+}
+
 /** Validates a hand-entered attendance record. Returns the parsed entry or an error message. */
 export function parseEntry(b: Record<string, unknown>): Entry | string {
   const date = String(b.date ?? "");
@@ -26,7 +31,7 @@ export function parseEntry(b: Record<string, unknown>): Entry | string {
   if (!Number.isFinite(breakMin) || breakMin < 0) return "Break must be 0 or more minutes.";
   if (breakMin * 60_000 > span) return "Break cannot be longer than the time on site.";
   if (punchOut.getTime() > now + 60_000) return "Out time cannot be in the future.";
-  if (punchIn.getTime() < now - 62 * 24 * HOUR) return "Entries older than 2 months cannot be added.";
+  if (punchIn.getTime() < now - 366 * 24 * HOUR) return "Entries older than a year cannot be added.";
   // The date label must match the punch-in day (allowing for timezone offsets).
   if (Math.abs(punchIn.getTime() - new Date(`${date}T00:00:00Z`).getTime()) > 36 * HOUR) {
     return "Date does not match the in time.";

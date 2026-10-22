@@ -8,6 +8,8 @@
   --muted: #6b7280;
   --accent: #4f46e5;
   --accent-fg: #ffffff;
+  /* Makes native controls (time/date pickers, scrollbars) match the theme. */
+  color-scheme: light;
 }
 
 @theme inline {
@@ -31,6 +33,7 @@
     --muted: #9aa1b5;
     --accent: #7c75ff;
     --accent-fg: #0d0f16;
+    color-scheme: dark;
   }
 }
 
@@ -46,6 +49,12 @@ body {
   }
   .input {
     @apply w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25;
+  }
+  .input:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+  .input::-webkit-calendar-picker-indicator {
+    @apply cursor-pointer opacity-80 hover:opacity-100;
   }
   .label {
     @apply mb-1 block text-xs font-medium text-muted;

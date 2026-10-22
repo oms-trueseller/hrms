@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { api, refresh } from "./api";
-import { dateKey, parseKey } from "./time";
+import { dateKey, daysInMonth, fromIST, weekday } from "./time";
 import type { Leave, Session } from "./types";
 
 /** Work policy: 8h net work per day, up to 1h of break allowed, 176h net per month. */
@@ -15,20 +15,21 @@ export const SHORT_DAY_MS = 4 * 3600_000;
  * Sessions for a date range (YYYY-MM-DD, inclusive). Open sessions are always included.
  * Admins can pass `userId` ("all" or an id); employees only ever receive their own.
  */
-export function useAttendance(range: { from: string; to: string; userId?: string }) {
+export function useAttendance(range: { from: string; to: string; userId?: string }, refreshInterval = 0) {
   const q = new URLSearchParams({ from: range.from, to: range.to });
   if (range.userId) q.set("userId", range.userId);
   const { data } = useSWR<{ sessions: Session[] }>(`/api/attendance?${q}`, api, {
     keepPreviousData: true,
+    refreshInterval,
   });
   return { sessions: data?.sessions ?? [], ready: !!data };
 }
 
 type Action = "punchIn" | "punchOut" | "startBreak" | "endBreak";
 
-/** Throws with the server's message on failure. */
-export async function attendanceAction(action: Action) {
-  await api("/api/attendance", { method: "POST", body: { action, date: dateKey(Date.now()) } });
+/** Throws with the server's message on failure. Admins can pass `userId` to start/end a break for an employee. */
+export async function attendanceAction(action: Action, userId?: string) {
+  await api("/api/attendance", { method: "POST", body: { action, userId, date: dateKey(Date.now()) } });
   await refresh("/api/attendance");
 }
 
@@ -93,7 +94,7 @@ export function summarizeDay(
   const worked = sorted.reduce((n, s) => n + workedMs(s, now), 0);
   const brk = sorted.reduce((n, s) => n + breakMs(s, now), 0);
   const active = sorted.some((s) => !s.punchOut);
-  const dow = parseKey(date).getDay();
+  const dow = weekday(date);
   const weekend = dow === 0 || dow === 6;
   const onLeave = leaves.some((l) => l.status === "approved" && l.from <= date && date <= l.to);
   const isToday = date === dateKey(now);
@@ -137,9 +138,8 @@ export function buildMonth(
   userLeaves: Leave[],
   now: number,
 ): DaySummary[] {
-  const [y, m] = month.split("-").map(Number);
   const today = dateKey(now);
-  const days = new Date(y, m, 0).getDate();
+  const days = daysInMonth(month);
   const rows: DaySummary[] = [];
   for (let d = days; d >= 1; d--) {
     const date = `${month}-${String(d).padStart(2, "0")}`;
@@ -204,22 +204,23 @@ export function summarizeMonth(rows: DaySummary[]): MonthSummary {
 
 export interface EntryInput {
   date: string; // YYYY-MM-DD
-  inTime: string; // HH:MM
-  outTime: string; // HH:MM
-  breakMinutes: number;
+  inTime: string; // HH:MM (IST)
+  /** Omit on a running session to keep it running (in time and break are still updated). */
+  outTime?: string;
+  breakMinutes?: number;
 }
 
-// Times are built in the browser's local timezone so the stored instants match what the user typed.
+// Times typed by the user are interpreted as IST.
 const entryBody = (e: EntryInput) => ({
   date: e.date,
-  punchIn: new Date(`${e.date}T${e.inTime}`).toISOString(),
-  punchOut: new Date(`${e.date}T${e.outTime}`).toISOString(),
-  breakMinutes: e.breakMinutes,
+  punchIn: fromIST(e.date, e.inTime).toISOString(),
+  breakMinutes: e.breakMinutes ?? 0,
+  ...(e.outTime ? { punchOut: fromIST(e.date, e.outTime).toISOString() } : {}),
 });
 
-/** Add a past day's attendance by hand. Throws with the server's message on failure. */
-export async function addEntry(e: EntryInput) {
-  await api("/api/attendance", { method: "POST", body: { action: "manual", ...entryBody(e) } });
+/** Add a day's attendance by hand (admins can pass `userId` to add for an employee). Throws with the server's message. */
+export async function addEntry(e: EntryInput, userId?: string) {
+  await api("/api/attendance", { method: "POST", body: { action: "manual", userId, ...entryBody(e) } });
   await refresh("/api/attendance");
 }
 

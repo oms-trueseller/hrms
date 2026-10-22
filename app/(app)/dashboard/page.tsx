@@ -19,14 +19,13 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useLeaves } from "@/lib/leaves";
 import { errorMessage } from "@/lib/api";
-import { dateKey, formatClock, formatDelta, formatHM, formatTime, monthKey, parseKey, useNow } from "@/lib/time";
+import { dateKey, formatClock, formatDelta, formatHM, formatLongDate, formatTime, hourIST, monthKey, addDays, weekday, useNow } from "@/lib/time";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const now = useNow();
   const today = dateKey(now);
-  const d = parseKey(today);
-  const weekStart = dateKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)));
+  const weekStart = addDays(today, -((weekday(today) + 6) % 7)); // Monday
   const monthStart = `${monthKey(now)}-01`;
   const { sessions: mine } = useAttendance({
     from: weekStart < monthStart ? weekStart : monthStart,
@@ -64,14 +63,14 @@ export default function Dashboard() {
 
   const recent = buildMonth(monthKey(now), mine, myLeaves, now).slice(0, 7);
   const progress = Math.min(100, (todayMs / DAY_TARGET_MS) * 100);
-  const hour = new Date(now).getHours();
+  const hour = hourIST(now);
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
     <>
       <PageHeader
         title={`${greeting}, ${user.name.split(" ")[0]}`}
-        subtitle={new Date(now).toLocaleDateString([], { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+        subtitle={formatLongDate(now)}
       />
 
       <section className="card mb-6 flex flex-col items-center gap-5 py-8 text-center">

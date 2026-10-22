@@ -15,7 +15,7 @@ export default function LeavesPage() {
   if (!user) return null;
 
   const mine = leaves;
-  const year = String(new Date().getFullYear());
+  const year = today.slice(0, 4);
   const used = (type: LeaveType) =>
     mine
       .filter((l) => l.type === type && l.status === "approved" && l.from.startsWith(year))

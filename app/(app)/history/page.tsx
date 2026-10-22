@@ -9,12 +9,15 @@ import { errorMessage } from "@/lib/api";
 import type { Session } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import { useLeaves } from "@/lib/leaves";
-import { dateKey, formatDelta, formatHM, monthKey, useNow } from "@/lib/time";
+import { dateKey, formatDelta, formatHM, formatTime, monthKey, useNow } from "@/lib/time";
 
 // Set to true to show the "+ Add / update entry" button for backfilling past days.
 const SHOW_ADD_ENTRY = false;
-// Set to true to show Edit / Delete on each session in the expanded day row.
-const SHOW_EDIT_DELETE = false;
+// Employees can edit/add only today's entry (or close a session left running from an earlier day);
+// other dates are changed by an admin from the All attendance page.
+const SHOW_EDIT = true;
+// Set to true to also show Delete next to Edit.
+const SHOW_DELETE = false;
 
 export default function HistoryPage() {
   const { user } = useAuth();
@@ -40,8 +43,8 @@ export default function HistoryPage() {
       ...rows.map((r) =>
         [
           r.date,
-          r.firstIn ? new Date(r.firstIn).toLocaleTimeString() : "",
-          r.lastOut ? new Date(r.lastOut).toLocaleTimeString() : "",
+          r.firstIn ? formatTime(r.firstIn) : "",
+          r.lastOut ? formatTime(r.lastOut) : "",
           min(r.grossMs),
           min(r.breakMs),
           min(r.breakOverMs),
@@ -125,9 +128,12 @@ export default function HistoryPage() {
         <DayTable
           rows={rows}
           now={now}
-          onEdit={SHOW_EDIT_DELETE ? (session) => setDialog({ date: session.date, session }) : undefined}
+          onAdd={SHOW_EDIT ? (r) => setDialog({ date: r.date }) : undefined}
+          canAdd={(r) => r.date === today}
+          onEdit={SHOW_EDIT ? (session) => setDialog({ date: session.date, session }) : undefined}
+          canEdit={(s) => s.date === today || !s.punchOut}
           onDelete={
-            SHOW_EDIT_DELETE
+            SHOW_DELETE
               ? async (s) => {
                   setDeleteError(null);
                   try {
@@ -149,8 +155,6 @@ export default function HistoryPage() {
           key={`${dialog.date}-${dialog.session?.id ?? "new"}`}
           date={dialog.date}
           session={dialog.session}
-          min={`${monthKey(now)}-01`}
-          max={today}
           onClose={() => setDialog(null)}
         />
       )}

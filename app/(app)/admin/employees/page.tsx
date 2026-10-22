@@ -1,23 +1,40 @@
 "use client";
 
+import { useState } from "react";
 import AdminOnly from "@/components/AdminOnly";
 import { Badge, PageHeader } from "@/components/ui";
-import { activeSession, onBreak, useAttendance, workedMs } from "@/lib/attendance";
+import { activeSession, attendanceAction, breakMs, onBreak, useAttendance, workedMs } from "@/lib/attendance";
+import { errorMessage } from "@/lib/api";
 import { setRole, useAuth, useUsers } from "@/lib/auth";
-import { dateKey, formatClock, formatDate, useNow } from "@/lib/time";
+import { dateKey, formatClock, formatDate, formatHM, useNow } from "@/lib/time";
 
 export default function EmployeesPage() {
   const { user } = useAuth();
   const users = useUsers(30_000);
   const now = useNow();
   const today = dateKey(now);
-  const { sessions } = useAttendance({ from: today, to: today, userId: "all" });
+  const { sessions } = useAttendance({ from: today, to: today, userId: "all" }, 15_000);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function breakAction(userId: string, action: "startBreak" | "endBreak") {
+    setBusyId(userId);
+    setError(null);
+    try {
+      await attendanceAction(action, userId);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <AdminOnly>
       <PageHeader title="Employees" subtitle={`${users.length} registered · live status`} />
+      {error && <p role="alert" className="mb-3 text-sm text-red-600">{error}</p>}
       <section className="card overflow-x-auto p-0">
-        <table className="w-full min-w-[720px]">
+        <table className="w-full min-w-[860px]">
           <thead className="border-b border-border">
             <tr>
               <th className="th">Employee</th>
@@ -25,6 +42,7 @@ export default function EmployeesPage() {
               <th className="th">Joined</th>
               <th className="th">Status</th>
               <th className="th">Today</th>
+              <th className="th">Break</th>
               <th className="th">Role</th>
             </tr>
           </thead>
@@ -46,6 +64,22 @@ export default function EmployeesPage() {
                     {active ? <Badge tone={onBreak(active) ? "amber" : "green"}>{onBreak(active) ? "On break" : "Punched in"}</Badge> : <Badge tone="gray">Out</Badge>}
                   </td>
                   <td className="td font-mono tabular-nums">{formatClock(ms)}</td>
+                  <td className="td whitespace-nowrap">
+                    {active ? (
+                      <div className="flex items-center gap-2">
+                        <span className="tabular-nums text-muted">{formatHM(breakMs(active, now))}</span>
+                        <button
+                          className="btn px-3 py-1"
+                          disabled={busyId === u.id}
+                          onClick={() => breakAction(u.id, onBreak(active) ? "endBreak" : "startBreak")}
+                        >
+                          {onBreak(active) ? "End break" : "Start break"}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
                   <td className="td">
                     <select
                       value={u.role}

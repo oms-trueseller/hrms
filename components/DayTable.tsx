@@ -25,21 +25,27 @@ export default function DayTable({
   showName,
   names,
   onAdd,
+  canAdd,
   onEdit,
+  canEdit,
   onDelete,
 }: {
   rows: DaySummary[];
   now: number;
   showName?: boolean;
   names?: Record<string, string>;
-  /** When provided, days can be filled in / edited by hand (own history only). */
-  onAdd?: (date: string) => void;
+  /** Show "+ Add" on days with no record (when canAdd allows). */
+  onAdd?: (row: DaySummary) => void;
+  canAdd?: (row: DaySummary) => boolean;
+  /** Show "Edit" on a day's sessions (when canEdit allows). */
   onEdit?: (s: Session) => void;
+  canEdit?: (s: Session) => boolean;
   onDelete?: (s: Session) => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   if (!rows.length) return <Empty>No records yet.</Empty>;
-  const cols = (showName ? 9 : 8) + (onAdd ? 1 : 0);
+  const hasActions = !!(onAdd || onEdit);
+  const cols = (showName ? 9 : 8) + (hasActions ? 1 : 0);
 
   return (
     <div className="overflow-x-auto">
@@ -55,7 +61,7 @@ export default function DayTable({
             <th className="th">Worked (net)</th>
             <th className="th">vs 8h</th>
             <th className="th">Status</th>
-            {onAdd && <th className="th" />}
+            {hasActions && <th className="th" />}
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -63,6 +69,7 @@ export default function DayTable({
             const key = r.date + (r.userId ?? "");
             const expandable = r.sessions.length > 0;
             const has = r.sessions.length > 0;
+            const editable = onEdit ? r.sessions.filter((s) => (canEdit ? canEdit(s) : true)) : [];
             return (
               <Fragment key={key}>
                 <tr
@@ -87,11 +94,24 @@ export default function DayTable({
                     {r.expectedMs === 0 && r.deltaMs !== null && !has ? "—" : <Delta ms={r.deltaMs} />}
                   </td>
                   <td className="td"><Badge>{r.status}</Badge></td>
-                  {onAdd && (
+                  {hasActions && (
                     <td className="td text-right">
-                      {!has && r.status !== "Not in yet" && (
-                        <button className="text-sm font-medium text-accent" onClick={() => onAdd(r.date)}>
+                      {!has && onAdd && (canAdd ? canAdd(r) : true) && (
+                        <button className="text-sm font-medium text-accent" onClick={() => onAdd(r)}>
                           + Add
+                        </button>
+                      )}
+                      {editable.length > 0 && (
+                        <button
+                          className="text-sm font-medium text-accent"
+                          onClick={(e) => {
+                            e.stopPropagation(); // do not toggle the row
+                            // One session: edit it directly. Several: open the row to pick one.
+                            if (editable.length === 1) onEdit?.(editable[0]);
+                            else setOpen(key);
+                          }}
+                        >
+                          Edit
                         </button>
                       )}
                     </td>
@@ -110,15 +130,17 @@ export default function DayTable({
                             <span>break {formatHM(breakMs(s, now))}</span>
                             <span>worked {formatHM(workedMs(s, now))}</span>
                             {SHOW_MANUAL_TAG && s.manual && <span className="text-xs font-medium text-amber-600">manual entry</span>}
-                            {onEdit && s.punchOut && (
+                            {onEdit && (canEdit ? canEdit(s) : true) && (
                               <span className="ml-auto flex gap-3">
                                 <button className="text-accent" onClick={() => onEdit(s)}>Edit</button>
-                                <button
-                                  className="text-red-600"
-                                  onClick={() => confirm(`Delete this session on ${formatDate(r.date)}?`) && onDelete?.(s)}
-                                >
-                                  Delete
-                                </button>
+                                {onDelete && s.punchOut && (
+                                  <button
+                                    className="text-red-600"
+                                    onClick={() => confirm(`Delete this session on ${formatDate(r.date)}?`) && onDelete(s)}
+                                  >
+                                    Delete
+                                  </button>
+                                )}
                               </span>
                             )}
                           </li>
