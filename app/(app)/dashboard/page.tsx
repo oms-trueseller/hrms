@@ -12,12 +12,14 @@ import {
   useAttendance,
   workedMs,
   breakMs,
-  FULL_DAY_MS,
+  summarizeMonth,
+  BREAK_ALLOWED_MS,
+  DAY_TARGET_MS,
 } from "@/lib/attendance";
 import { useAuth } from "@/lib/auth";
 import { useLeaves } from "@/lib/leaves";
 import { errorMessage } from "@/lib/api";
-import { dateKey, formatClock, formatHM, formatTime, monthKey, parseKey, useNow } from "@/lib/time";
+import { dateKey, formatClock, formatDelta, formatHM, formatTime, monthKey, parseKey, useNow } from "@/lib/time";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -57,11 +59,11 @@ export default function Dashboard() {
   // Week (Mon–Sun) total and month attendance.
   const weekMs = mine.filter((s) => s.date >= weekStart).reduce((n, s) => n + workedMs(s, now), 0);
   const monthRows = buildMonth(monthKey(now), mine, myLeaves, now);
-  const presentDays = monthRows.filter((r) => r.status === "Present" || r.status === "Working").length;
-  const pending = myLeaves.filter((l) => l.status === "pending").length;
+  const month = summarizeMonth(monthRows);
+  const remaining = Math.max(0, DAY_TARGET_MS - todayMs);
 
   const recent = buildMonth(monthKey(now), mine, myLeaves, now).slice(0, 7);
-  const progress = Math.min(100, (todayMs / FULL_DAY_MS) * 100);
+  const progress = Math.min(100, (todayMs / DAY_TARGET_MS) * 100);
   const hour = new Date(now).getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
@@ -92,7 +94,12 @@ export default function Dashboard() {
           <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progress}%` }} />
         </div>
         <p className="-mt-3 text-xs text-muted">
-          {formatHM(todayMs)} of 8h target · breaks {formatHM(todayBreak)}
+          {formatHM(todayMs)} of 8h worked
+          {remaining > 0 ? ` · ${formatHM(remaining)} left` : " · target reached"}
+        </p>
+        <p className={`-mt-3 text-xs ${todayBreak > BREAK_ALLOWED_MS ? "font-medium text-amber-600" : "text-muted"}`}>
+          Break {formatHM(todayBreak)} of {formatHM(BREAK_ALLOWED_MS)} allowed
+          {todayBreak > BREAK_ALLOWED_MS && " · over the limit, extra break time is not counted as work"}
         </p>
 
         <div className="flex flex-wrap justify-center gap-3">
@@ -121,8 +128,8 @@ export default function Dashboard() {
       <section className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Today" value={formatHM(todayMs)} hint={`${todaySessions.length} session(s)`} />
         <Stat label="This week" value={formatHM(weekMs)} />
-        <Stat label="Days present (month)" value={String(presentDays)} />
-        <Stat label="Pending leave requests" value={String(pending)} />
+        <Stat label="This month" value={formatHM(month.workedMs)} hint={`of 176h · ${formatHM(month.remainingMs)} to go`} />
+        <Stat label="Month balance" value={formatDelta(month.balanceMs)} hint="vs 8h on each completed working day" />
       </section>
 
       <section className="card p-0">

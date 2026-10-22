@@ -1,5 +1,5 @@
 import { jwtVerify, SignJWT } from "jose";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { connectDB } from "./db";
 import { User } from "@/models/User";
 import type { Role } from "@/lib/types";
@@ -22,7 +22,8 @@ export async function setSessionCookie(userId: string) {
   (await cookies()).set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // Only mark Secure when actually served over HTTPS; browsers drop Secure cookies on http://<LAN-ip>.
+    secure: (await headers()).get("x-forwarded-proto") === "https",
     path: "/",
     maxAge: MAX_AGE,
   });
@@ -38,17 +39,22 @@ export interface Me {
   role: Role;
 }
 
-/** The logged-in user from the cookie, or null. Reads role fresh from the DB. */
+/**
+ * The logged-in user from the cookie, or null if there is no valid login.
+ * Reads role fresh from the DB. Database errors are thrown (not treated as "logged out"),
+ * so an outage shows up as a 503 instead of a false 401.
+ */
 export async function getMe(): Promise<Me | null> {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
+  let sub: string | undefined;
   try {
-    const { payload } = await jwtVerify(token, secret());
-    if (!payload.sub) return null;
-    await connectDB();
-    const u = await User.findById(payload.sub).select("role name").lean<{ _id: unknown; role: Role; name: string }>();
-    return u ? { id: payload.sub, name: u.name, role: u.role } : null;
+    sub = (await jwtVerify(token, secret())).payload.sub;
   } catch {
-    return null;
+    return null; // bad/expired token
   }
+  if (!sub) return null;
+  await connectDB();
+  const u = await User.findById(sub).select("role name").lean<{ _id: unknown; role: Role; name: string }>();
+  return u ? { id: sub, name: u.name, role: u.role } : null;
 }

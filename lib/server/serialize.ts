@@ -21,6 +21,7 @@ export const toSession = (s: any): Session => ({
   punchIn: iso(s.punchIn)!,
   punchOut: iso(s.punchOut),
   breaks: (s.breaks ?? []).map((b: any) => ({ start: iso(b.start)!, end: iso(b.end) })),
+  manual: s.manual || undefined,
 });
 
 export const toLeave = (l: any): Leave => ({

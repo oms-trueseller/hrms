@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { json } from "@/lib/server/api";
+import { json, serverError } from "@/lib/server/api";
 import { getMe } from "@/lib/server/auth";
 import { connectDB } from "@/lib/server/db";
 import { toUser } from "@/lib/server/serialize";
@@ -13,7 +13,6 @@ export async function GET() {
     await connectDB();
     return json({ user: toUser(await User.findById(me.id).lean()) });
   } catch (e) {
-    console.error(e);
-    return json({ error: "Server error" }, 500);
+    return serverError(e);
   }
 }

@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { fail, json } from "@/lib/server/api";
+import { fail, json, serverError } from "@/lib/server/api";
 import { getMe, setSessionCookie } from "@/lib/server/auth";
 import { connectDB } from "@/lib/server/db";
 import { toUser } from "@/lib/server/serialize";
@@ -38,7 +38,6 @@ export async function POST(req: Request) {
     return json({ user: toUser(user) }, 201);
   } catch (e) {
     if ((e as { code?: number }).code === 11000) return fail("An account with this email already exists.", 409);
-    console.error(e);
-    return fail("Server error", 500);
+    return serverError(e);
   }
 }

@@ -10,6 +10,8 @@ const attendanceSchema = new Schema(
     // Set to true only while the session is open, so the partial unique index below
     // guarantees at most one open session per user (even under double-clicks / races).
     open: { type: Boolean },
+    // True when the times were entered/edited by hand instead of punched live.
+    manual: { type: Boolean },
     breaks: [{ _id: false, start: { type: Date, required: true }, end: Date }],
   },
   { timestamps: true },

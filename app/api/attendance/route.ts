@@ -1,5 +1,6 @@
 import { isValidObjectId } from "mongoose";
 import { DATE_RE, fail, json, route } from "@/lib/server/api";
+import { findOverlap, parseEntry } from "@/lib/server/manual";
 import { toSession } from "@/lib/server/serialize";
 import { Attendance } from "@/models/Attendance";
 
@@ -27,14 +28,22 @@ export const GET = route(async (req, me) => {
   return json({ sessions: rows.map(toSession) });
 });
 
-/** POST { action: punchIn | punchOut | startBreak | endBreak, date?: YYYY-MM-DD } — times are server time. */
+/** POST { action: punchIn | punchOut | startBreak | endBreak | manual, date?: YYYY-MM-DD } — times are server time. */
 export const POST = route(async (req, me) => {
-  const { action, date } = await req.json();
+  const body = await req.json();
+  const { action, date } = body;
   const now = new Date();
   const mine = { userId: me.id, open: true };
   const endOpenBreaks = { arrayFilters: [{ "b.end": { $exists: false } }] };
 
   switch (action) {
+    case "manual": {
+      const e = parseEntry(body);
+      if (typeof e === "string") return fail(e);
+      if (await findOverlap(me.id, e)) return fail("This overlaps another entry on the same day.", 409);
+      const s = await Attendance.create({ userId: me.id, ...e, manual: true });
+      return json({ session: toSession(s) }, 201);
+    }
     case "punchIn": {
       if (!DATE_RE.test(date ?? "")) return fail("date is required");
       try {

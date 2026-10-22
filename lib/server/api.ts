@@ -17,10 +17,19 @@ export function route<C = unknown>(handler: Handler<C>, opts: { admin?: boolean 
       if (opts.admin && me.role !== "admin") return fail("Admin access required", 403);
       return await handler(req, me, ctx);
     } catch (e) {
-      console.error(e);
-      return fail("Server error", 500);
+      return serverError(e);
     }
   };
+}
+
+/** Maps thrown errors to a response; database connectivity problems become a clear 503. */
+export function serverError(e: unknown) {
+  console.error(e);
+  const name = e instanceof Error ? e.name : "";
+  if (name.startsWith("MongoServerSelection") || name.startsWith("MongoNetwork") || name === "MongooseServerSelectionError") {
+    return fail("Cannot reach the database. Check your internet connection and Atlas Network Access (IP allow list).", 503);
+  }
+  return fail("Server error", 500);
 }
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

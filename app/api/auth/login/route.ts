@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { fail, json } from "@/lib/server/api";
+import { fail, json, serverError } from "@/lib/server/api";
 import { getMe, setSessionCookie } from "@/lib/server/auth";
 import { connectDB } from "@/lib/server/db";
 import { toUser } from "@/lib/server/serialize";
@@ -24,7 +24,6 @@ export async function POST(req: Request) {
     await setSessionCookie(String(user._id));
     return json({ user: toUser(user) });
   } catch (e) {
-    console.error(e);
-    return fail("Server error", 500);
+    return serverError(e);
   }
 }

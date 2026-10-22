@@ -24,6 +24,8 @@ export interface Session {
   punchIn: string; // ISO
   punchOut?: string;
   breaks: Break[];
+  /** Entered or edited by hand (not live punches). */
+  manual?: boolean;
 }
 
 export type LeaveType = "Casual" | "Sick" | "Paid" | "Unpaid";

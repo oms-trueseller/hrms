@@ -28,6 +28,12 @@ export function formatHM(ms: number): string {
   return `${Math.floor(m / 60)}h ${pad(m % 60)}m`;
 }
 
+/** Signed difference, e.g. "+0h 20m", "−1h 05m", or "On target". */
+export function formatDelta(ms: number): string {
+  if (Math.abs(ms) < 60_000) return "On target";
+  return `${ms > 0 ? "+" : "−"}${formatHM(Math.abs(ms))}`;
+}
+
 export function formatTime(iso?: string): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

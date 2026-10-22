@@ -10,9 +10,11 @@ const TONES: Record<string, string> = {
 
 const STATUS_TONE: Record<string, string> = {
   Working: "blue",
-  Present: "green",
+  "Full day": "green",
+  Short: "amber",
+  "Very short": "red",
+  "Not in yet": "gray",
   approved: "green",
-  "Half day": "amber",
   pending: "amber",
   "On leave": "blue",
   Absent: "red",
