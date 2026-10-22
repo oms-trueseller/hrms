@@ -5,17 +5,17 @@ import AdminOnly from "@/components/AdminOnly";
 import DayTable from "@/components/DayTable";
 import { PageHeader } from "@/components/ui";
 import { summarizeDay, useAttendance, type DaySummary } from "@/lib/attendance";
-import { useAuth } from "@/lib/auth";
+import { useUsers } from "@/lib/auth";
 import { useLeaves } from "@/lib/leaves";
 import { dateKey, useNow } from "@/lib/time";
 
 export default function AllAttendancePage() {
-  const { users } = useAuth();
-  const { sessions } = useAttendance();
-  const { leaves } = useLeaves();
+  const users = useUsers();
   const now = useNow();
   const [date, setDate] = useState(() => dateKey(Date.now()));
   const [employee, setEmployee] = useState("all");
+  const { sessions } = useAttendance({ from: date, to: date, userId: employee });
+  const { leaves } = useLeaves(true);
 
   const names = useMemo(() => Object.fromEntries(users.map((u) => [u.id, u.name])), [users]);
 

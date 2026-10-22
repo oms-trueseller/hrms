@@ -14,29 +14,28 @@ export default function LeavesPage() {
   const today = dateKey(useNow(false));
   if (!user) return null;
 
-  const mine = leaves.filter((l) => l.userId === user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const mine = leaves;
   const year = String(new Date().getFullYear());
   const used = (type: LeaveType) =>
     mine
       .filter((l) => l.type === type && l.status === "approved" && l.from.startsWith(year))
       .reduce((n, l) => n + leaveDays(l), 0);
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const f = new FormData(form);
     const from = String(f.get("from"));
     const to = String(f.get("to"));
     if (to < from) return setError("End date cannot be before start date.");
-    setError(null);
-    applyLeave({
-      userId: user!.id,
+    const err = await applyLeave({
       type: String(f.get("type")) as LeaveType,
       from,
       to,
       reason: String(f.get("reason")).trim(),
     });
-    form.reset();
+    setError(err);
+    if (!err) form.reset();
   }
 
   return (

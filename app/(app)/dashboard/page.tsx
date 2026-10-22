@@ -1,17 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useState } from "react";
 import DayTable from "@/components/DayTable";
 import { PageHeader, Stat } from "@/components/ui";
 import {
   activeSession,
   buildMonth,
-  endBreak,
+  attendanceAction,
   onBreak,
-  punchIn,
-  punchOut,
-  startBreak,
   useAttendance,
   workedMs,
   breakMs,
@@ -19,28 +16,45 @@ import {
 } from "@/lib/attendance";
 import { useAuth } from "@/lib/auth";
 import { useLeaves } from "@/lib/leaves";
+import { errorMessage } from "@/lib/api";
 import { dateKey, formatClock, formatHM, formatTime, monthKey, parseKey, useNow } from "@/lib/time";
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { sessions } = useAttendance();
-  const { leaves } = useLeaves();
-  const mine = useMemo(() => sessions.filter((s) => s.userId === user?.id), [sessions, user?.id]);
-  const myLeaves = useMemo(() => leaves.filter((l) => l.userId === user?.id), [leaves, user?.id]);
-
-  const active = user ? activeSession(sessions, user.id) : undefined;
   const now = useNow();
-  if (!user) return null;
-
   const today = dateKey(now);
+  const d = parseKey(today);
+  const weekStart = dateKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)));
+  const monthStart = `${monthKey(now)}-01`;
+  const { sessions: mine } = useAttendance({
+    from: weekStart < monthStart ? weekStart : monthStart,
+    to: today,
+  });
+  const { leaves: myLeaves } = useLeaves();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (!user) return null;
+  const active = activeSession(mine, user.id);
+
+  async function act(a: Parameters<typeof attendanceAction>[0]) {
+    setBusy(true);
+    setError(null);
+    try {
+      await attendanceAction(a);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const todaySessions = mine.filter((s) => s.date === today);
   const todayMs = todaySessions.reduce((n, s) => n + workedMs(s, now), 0);
   const todayBreak = todaySessions.reduce((n, s) => n + breakMs(s, now), 0);
   const breaking = !!active && onBreak(active);
 
   // Week (Mon–Sun) total and month attendance.
-  const d = parseKey(today);
-  const weekStart = dateKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)));
   const weekMs = mine.filter((s) => s.date >= weekStart).reduce((n, s) => n + workedMs(s, now), 0);
   const monthRows = buildMonth(monthKey(now), mine, myLeaves, now);
   const presentDays = monthRows.filter((r) => r.status === "Present" || r.status === "Working").length;
@@ -83,23 +97,25 @@ export default function Dashboard() {
 
         <div className="flex flex-wrap justify-center gap-3">
           {!active ? (
-            <button className="btn btn-primary px-8 py-3 text-base" onClick={() => punchIn(user.id)}>
+            <button disabled={busy} className="btn btn-primary px-8 py-3 text-base" onClick={() => act("punchIn")}>
               Punch in
             </button>
           ) : (
             <>
-              <button className="btn btn-danger px-8 py-3 text-base" onClick={() => punchOut(user.id)}>
+              <button disabled={busy} className="btn btn-danger px-8 py-3 text-base" onClick={() => act("punchOut")}>
                 Punch out
               </button>
               <button
+                disabled={busy}
                 className="btn px-6 py-3 text-base"
-                onClick={() => (breaking ? endBreak(user.id) : startBreak(user.id))}
+                onClick={() => act(breaking ? "endBreak" : "startBreak")}
               >
                 {breaking ? "End break" : "Start break"}
               </button>
             </>
           )}
         </div>
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       </section>
 
       <section className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">

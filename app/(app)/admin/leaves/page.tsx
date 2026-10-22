@@ -2,13 +2,13 @@
 
 import AdminOnly from "@/components/AdminOnly";
 import { Badge, Empty, PageHeader } from "@/components/ui";
-import { useAuth } from "@/lib/auth";
+import { useUsers } from "@/lib/auth";
 import { leaveDays, setLeaveStatus, useLeaves } from "@/lib/leaves";
 import { formatDate } from "@/lib/time";
 
 export default function LeaveApprovalsPage() {
-  const { users } = useAuth();
-  const { leaves } = useLeaves();
+  const users = useUsers();
+  const { leaves } = useLeaves(true);
   const name = (id: string) => users.find((u) => u.id === id)?.name ?? "Unknown";
   const sorted = [...leaves].sort(
     (a, b) => Number(b.status === "pending") - Number(a.status === "pending") || b.createdAt.localeCompare(a.createdAt),

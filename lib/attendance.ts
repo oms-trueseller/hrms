@@ -1,68 +1,36 @@
 "use client";
 
-import { KEYS, newId, readCollection, useCollection, writeCollection } from "./store";
+import useSWR from "swr";
+import { api, refresh } from "./api";
 import { dateKey, parseKey } from "./time";
 import type { Leave, Session } from "./types";
 
 export const FULL_DAY_MS = 8 * 3600_000;
 export const HALF_DAY_MS = 4 * 3600_000;
 
-export function useAttendance() {
-  const { items, ready } = useCollection<Session>(KEYS.attendance);
-  return { sessions: items, ready };
-}
-
-function update(fn: (all: Session[]) => Session[]) {
-  writeCollection(KEYS.attendance, fn(readCollection<Session>(KEYS.attendance)));
-}
-
-const isOpen = (s: Session, userId: string) => s.userId === userId && !s.punchOut;
-
-export function punchIn(userId: string) {
-  update((all) => {
-    if (all.some((s) => isOpen(s, userId))) return all;
-    const now = new Date();
-    return [
-      ...all,
-      { id: newId(), userId, date: dateKey(now), punchIn: now.toISOString(), breaks: [] },
-    ];
+/**
+ * Sessions for a date range (YYYY-MM-DD, inclusive). Open sessions are always included.
+ * Admins can pass `userId` ("all" or an id); employees only ever receive their own.
+ */
+export function useAttendance(range: { from: string; to: string; userId?: string }) {
+  const q = new URLSearchParams({ from: range.from, to: range.to });
+  if (range.userId) q.set("userId", range.userId);
+  const { data } = useSWR<{ sessions: Session[] }>(`/api/attendance?${q}`, api, {
+    keepPreviousData: true,
   });
+  return { sessions: data?.sessions ?? [], ready: !!data };
 }
 
-export function punchOut(userId: string) {
-  const iso = new Date().toISOString();
-  update((all) =>
-    all.map((s) =>
-      isOpen(s, userId)
-        ? {
-            ...s,
-            punchOut: iso,
-            breaks: s.breaks.map((b) => (b.end ? b : { ...b, end: iso })),
-          }
-        : s,
-    ),
-  );
+type Action = "punchIn" | "punchOut" | "startBreak" | "endBreak";
+
+/** Throws with the server's message on failure. */
+export async function attendanceAction(action: Action) {
+  await api("/api/attendance", { method: "POST", body: { action, date: dateKey(Date.now()) } });
+  await refresh("/api/attendance");
 }
 
-export function startBreak(userId: string) {
-  const iso = new Date().toISOString();
-  update((all) =>
-    all.map((s) =>
-      isOpen(s, userId) && !onBreak(s) ? { ...s, breaks: [...s.breaks, { start: iso }] } : s,
-    ),
-  );
-}
-
-export function endBreak(userId: string) {
-  const iso = new Date().toISOString();
-  update((all) =>
-    all.map((s) =>
-      isOpen(s, userId)
-        ? { ...s, breaks: s.breaks.map((b) => (b.end ? b : { ...b, end: iso })) }
-        : s,
-    ),
-  );
-}
+export const activeSession = (sessions: Session[], userId: string) =>
+  sessions.find((s) => s.userId === userId && !s.punchOut);
 
 export const onBreak = (s: Session) => s.breaks.some((b) => !b.end);
 
@@ -78,10 +46,6 @@ export function breakMs(s: Session, now: number): number {
 export function workedMs(s: Session, now: number): number {
   const end = s.punchOut ? new Date(s.punchOut).getTime() : now;
   return Math.max(0, end - new Date(s.punchIn).getTime() - breakMs(s, now));
-}
-
-export function activeSession(sessions: Session[], userId: string) {
-  return sessions.find((s) => isOpen(s, userId));
 }
 
 export type DayStatus = "Working" | "Present" | "Half day" | "On leave" | "Weekend" | "Absent";

@@ -1,0 +1,27 @@
+import mongoose, { Schema } from "mongoose";
+
+/** One punch-in/punch-out pair. A day can have several. */
+const attendanceSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    date: { type: String, required: true }, // YYYY-MM-DD, employee's local day of punch in
+    punchIn: { type: Date, required: true },
+    punchOut: { type: Date },
+    // Set to true only while the session is open, so the partial unique index below
+    // guarantees at most one open session per user (even under double-clicks / races).
+    open: { type: Boolean },
+    breaks: [{ _id: false, start: { type: Date, required: true }, end: Date }],
+  },
+  { timestamps: true },
+);
+
+// History by user and date range (month view, dashboard).
+attendanceSchema.index({ userId: 1, date: -1 });
+// Admin "everyone on a given day" view.
+attendanceSchema.index({ date: 1 });
+// At most one open session per user; also makes "find active session" an index hit.
+attendanceSchema.index({ userId: 1 }, { unique: true, partialFilterExpression: { open: true } });
+// Admin live-status lookup of all open sessions.
+attendanceSchema.index({ open: 1 }, { partialFilterExpression: { open: true } });
+
+export const Attendance = mongoose.models.Attendance ?? mongoose.model("Attendance", attendanceSchema);

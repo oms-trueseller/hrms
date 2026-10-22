@@ -1,76 +1,55 @@
 "use client";
 
-import {
-  KEYS,
-  newId,
-  readCollection,
-  setSessionUserId,
-  useCollection,
-  useSessionUserId,
-  writeCollection,
-} from "./store";
+import useSWR, { mutate } from "swr";
+import { api, errorMessage, refresh } from "./api";
 import type { Role, User } from "./types";
 
-// Demo-only hashing; real auth must happen server-side once a DB exists.
-async function hash(email: string, password: string): Promise<string> {
-  const data = new TextEncoder().encode(`${email.toLowerCase()}:${password}`);
-  const buf = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
-}
+const ME = "/api/auth/me";
 
 export function useAuth() {
-  const id = useSessionUserId();
-  const { items: users, ready } = useCollection<User>(KEYS.users);
-  const user = id ? (users.find((u) => u.id === id) ?? null) : null;
-  return { ready: ready && id !== undefined, user, users };
+  const { data, isLoading } = useSWR<{ user: User | null }>(ME, api);
+  return { ready: !isLoading, user: data?.user ?? null };
 }
 
-export async function signup(input: {
+/** All employees (admin only). Polls so live-status pages stay fresh. */
+export function useUsers(refreshInterval = 0) {
+  const { data } = useSWR<{ users: User[] }>("/api/users", api, { refreshInterval });
+  return data?.users ?? [];
+}
+
+async function authenticate(path: string, body: unknown): Promise<string | null> {
+  try {
+    const { user } = await api<{ user: User }>(path, { method: "POST", body });
+    await mutate(ME, { user }, { revalidate: false });
+    return null;
+  } catch (e) {
+    return errorMessage(e);
+  }
+}
+
+export const signup = (input: {
   name: string;
   email: string;
   password: string;
   department: string;
   designation: string;
-}): Promise<string | null> {
-  const users = readCollection<User>(KEYS.users);
-  const email = input.email.trim().toLowerCase();
-  if (users.some((u) => u.email === email)) return "An account with this email already exists.";
-  const user: User = {
-    id: newId(),
-    name: input.name.trim(),
-    email,
-    passwordHash: await hash(email, input.password),
-    // The first account becomes the admin.
-    role: users.length === 0 ? "admin" : "employee",
-    department: input.department.trim(),
-    designation: input.designation.trim(),
-    phone: "",
-    joinedAt: new Date().toISOString(),
-  };
-  writeCollection(KEYS.users, [...users, user]);
-  setSessionUserId(user.id);
-  return null;
+}) => authenticate("/api/auth/signup", input);
+
+export const login = (email: string, password: string) => authenticate("/api/auth/login", { email, password });
+
+export async function logout() {
+  await api("/api/auth/logout", { method: "POST" });
+  // Drop every cached key so the next user never sees the previous user's data.
+  await mutate(() => true, undefined, { revalidate: false });
+  await mutate(ME, { user: null }, { revalidate: false });
 }
 
-export async function login(email: string, password: string): Promise<string | null> {
-  const e = email.trim().toLowerCase();
-  const user = readCollection<User>(KEYS.users).find((u) => u.email === e);
-  if (!user || user.passwordHash !== (await hash(e, password))) return "Invalid email or password.";
-  setSessionUserId(user.id);
-  return null;
+export async function updateProfile(patch: Partial<Pick<User, "name" | "department" | "designation" | "phone">>) {
+  const { user } = await api<{ user: User }>("/api/users/me", { method: "PATCH", body: patch });
+  await mutate(ME, { user }, { revalidate: false });
 }
 
-export function logout() {
-  setSessionUserId(null);
-}
-
-export function updateUser(id: string, patch: Partial<Pick<User, "name" | "department" | "designation" | "phone" | "role">>) {
-  writeCollection(
-    KEYS.users,
-    readCollection<User>(KEYS.users).map((u) => (u.id === id ? { ...u, ...patch } : u)),
-  );
-}
-
-export function setRole(id: string, role: Role) {
-  updateUser(id, { role });
+export async function setRole(id: string, role: Role) {
+  await api(`/api/users/${id}`, { method: "PATCH", body: { role } });
+  await refresh("/api/users");
 }

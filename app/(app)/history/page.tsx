@@ -10,21 +10,12 @@ import { formatHM, monthKey, useNow } from "@/lib/time";
 
 export default function HistoryPage() {
   const { user } = useAuth();
-  const { sessions } = useAttendance();
-  const { leaves } = useLeaves();
   const now = useNow();
   const [month, setMonth] = useState(() => monthKey(Date.now()));
+  const { sessions } = useAttendance({ from: `${month}-01`, to: `${month}-31` });
+  const { leaves } = useLeaves();
 
-  const rows = useMemo(
-    () =>
-      buildMonth(
-        month,
-        sessions.filter((s) => s.userId === user?.id),
-        leaves.filter((l) => l.userId === user?.id),
-        now,
-      ),
-    [month, sessions, leaves, user?.id, now],
-  );
+  const rows = useMemo(() => buildMonth(month, sessions, leaves, now), [month, sessions, leaves, now]);
   if (!user) return null;
 
   const total = rows.reduce((n, r) => n + r.workedMs, 0);

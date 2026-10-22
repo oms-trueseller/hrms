@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { PageHeader } from "@/components/ui";
-import { updateUser, useAuth } from "@/lib/auth";
+import { updateProfile, useAuth } from "@/lib/auth";
 import { formatDate, dateKey } from "@/lib/time";
 
 export default function ProfilePage() {
@@ -10,11 +10,11 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false);
   if (!user) return null;
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const get = (k: string) => String(f.get(k) ?? "").trim();
-    updateUser(user!.id, {
+    await updateProfile({
       name: get("name"),
       phone: get("phone"),
       department: get("department"),

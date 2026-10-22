@@ -3,13 +3,15 @@
 import AdminOnly from "@/components/AdminOnly";
 import { Badge, PageHeader } from "@/components/ui";
 import { activeSession, onBreak, useAttendance, workedMs } from "@/lib/attendance";
-import { setRole, useAuth } from "@/lib/auth";
+import { setRole, useAuth, useUsers } from "@/lib/auth";
 import { dateKey, formatClock, formatDate, useNow } from "@/lib/time";
 
 export default function EmployeesPage() {
-  const { user, users } = useAuth();
-  const { sessions } = useAttendance();
+  const { user } = useAuth();
+  const users = useUsers(30_000);
   const now = useNow();
+  const today = dateKey(now);
+  const { sessions } = useAttendance({ from: today, to: today, userId: "all" });
 
   return (
     <AdminOnly>
@@ -29,7 +31,6 @@ export default function EmployeesPage() {
           <tbody className="divide-y divide-border">
             {users.map((u) => {
               const active = activeSession(sessions, u.id);
-              const today = dateKey(now);
               const ms = sessions
                 .filter((s) => s.userId === u.id && s.date === today)
                 .reduce((n, s) => n + workedMs(s, now), 0);
