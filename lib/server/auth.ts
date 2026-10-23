@@ -39,22 +39,48 @@ export interface Me {
   role: Role;
 }
 
-/**
- * The logged-in user from the cookie, or null if there is no valid login.
- * Reads role fresh from the DB. Database errors are thrown (not treated as "logged out"),
- * so an outage shows up as a 503 instead of a false 401.
- */
-export async function getMe(): Promise<Me | null> {
+/** User id from a valid login cookie, or null. Pure JWT check: no database round trip. */
+export async function getSessionUserId(): Promise<string | null> {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
-  let sub: string | undefined;
   try {
-    sub = (await jwtVerify(token, secret())).payload.sub;
+    return (await jwtVerify(token, secret())).payload.sub ?? null;
   } catch {
     return null; // bad/expired token
   }
-  if (!sub) return null;
+}
+
+// Role/name of recently seen users, so most requests skip the user lookup (one DB round trip saved).
+// Kept on globalThis so it survives dev hot reloads. Admin-only routes bypass it (see `fresh`).
+const TTL_MS = 30_000;
+const g = globalThis as unknown as { _meCache?: Map<string, { me: Me; expires: number }> };
+const meCache = (g._meCache ??= new Map());
+
+/** Forget cached role/name, e.g. right after changing them. Other server instances catch up within TTL. */
+export function invalidateMe(id: string) {
+  meCache.delete(id);
+}
+
+/**
+ * The logged-in user, or null if there is no valid login.
+ * Role comes from a short-lived cache unless `fresh` is set (use it for admin-only actions).
+ * Database errors are thrown (not treated as "logged out"), so an outage is a 503, not a false 401.
+ */
+export async function getMe({ fresh = false }: { fresh?: boolean } = {}): Promise<Me | null> {
+  const id = await getSessionUserId();
+  if (!id) return null;
+
+  const hit = meCache.get(id);
+  if (hit && !fresh && hit.expires > Date.now()) return hit.me;
+
   await connectDB();
-  const u = await User.findById(sub).select("role name").lean<{ _id: unknown; role: Role; name: string }>();
-  return u ? { id: sub, name: u.name, role: u.role } : null;
+  const u = await User.findById(id).select("role name").lean<{ _id: unknown; role: Role; name: string }>();
+  if (!u) {
+    meCache.delete(id);
+    return null;
+  }
+  const me: Me = { id, name: u.name, role: u.role };
+  if (meCache.size > 5000) meCache.clear(); // bound memory
+  meCache.set(id, { me, expires: Date.now() + TTL_MS });
+  return me;
 }

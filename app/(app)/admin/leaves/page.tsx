@@ -10,9 +10,7 @@ export default function LeaveApprovalsPage() {
   const users = useUsers();
   const { leaves } = useLeaves(true);
   const name = (id: string) => users.find((u) => u.id === id)?.name ?? "Unknown";
-  const sorted = [...leaves].sort(
-    (a, b) => Number(b.status === "pending") - Number(a.status === "pending") || b.createdAt.localeCompare(a.createdAt),
-  );
+  const sorted = leaves; // the server already sends pending first, newest first within each group
 
   return (
     <AdminOnly>
@@ -36,7 +34,7 @@ export default function LeaveApprovalsPage() {
               <tbody className="divide-y divide-border">
                 {sorted.map((l) => (
                   <tr key={l.id}>
-                    <td className="td font-medium">{name(l.userId)}</td>
+                    <td className="td font-medium">{name(l.userId ?? "")}</td>
                     <td className="td">{l.type} · {leaveDays(l)}d</td>
                     <td className="td">{formatDate(l.from)}{l.to !== l.from && ` – ${formatDate(l.to)}`}</td>
                     <td className="td max-w-56 truncate" title={l.reason}>{l.reason}</td>

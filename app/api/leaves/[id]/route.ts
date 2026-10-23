@@ -1,6 +1,5 @@
 import { isValidObjectId } from "mongoose";
 import { fail, json, route } from "@/lib/server/api";
-import { toLeave } from "@/lib/server/serialize";
 import { Leave } from "@/models/Leave";
 
 /** Admin: set status to approved / rejected / pending. */
@@ -9,8 +8,8 @@ export const PATCH = route(
     const { id } = await ctx.params;
     const { status } = await req.json();
     if (!isValidObjectId(id) || !["pending", "approved", "rejected"].includes(status)) return fail("Invalid request");
-    const leave = await Leave.findByIdAndUpdate(id, { status, reviewedBy: me.id }, { new: true }).lean();
-    return leave ? json({ leave: toLeave(leave) }) : fail("Leave not found", 404);
+    const r = await Leave.updateOne({ _id: id }, { status, reviewedBy: me.id });
+    return r.matchedCount ? json({ ok: true }) : fail("Leave not found", 404);
   },
   { admin: true },
 );

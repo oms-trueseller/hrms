@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { logout, useAuth } from "@/lib/auth";
 
 const NAV = [
@@ -18,16 +18,31 @@ const ADMIN_NAV = [
   { href: "/admin/leaves", label: "Leave approvals" },
 ];
 
+const noopSubscribe = () => () => {};
+/** false on the server and during hydration, true afterwards. */
+const useIsClient = () => useSyncExternalStore(noopSubscribe, () => true, () => false);
+
 export default function Shell({ children }: { children: ReactNode }) {
   const { ready, user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const isClient = useIsClient();
 
   useEffect(() => {
     if (ready && !user) router.replace("/login");
   }, [ready, user, router]);
 
-  if (!ready || !user) {
+  if (!ready) {
+    // Mount the page (hidden, client-side only) while the login check runs, so its data requests go out
+    // in parallel with it instead of waiting for it. SWR shares the in-flight requests when it is shown.
+    return (
+      <>
+        <div className="grid flex-1 place-items-center text-sm text-muted">Loading…</div>
+        {isClient && <div hidden>{children}</div>}
+      </>
+    );
+  }
+  if (!user) {
     return <div className="grid flex-1 place-items-center text-sm text-muted">Loading…</div>;
   }
 

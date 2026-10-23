@@ -1,7 +1,6 @@
 import { isValidObjectId } from "mongoose";
 import { DATE_RE, fail, json, route } from "@/lib/server/api";
 import { findOverlap, istToday, parseEntry } from "@/lib/server/manual";
-import { toSession } from "@/lib/server/serialize";
 import { Attendance } from "@/models/Attendance";
 
 /**
@@ -57,19 +56,15 @@ export const PATCH = route(async (req, me, ctx: RouteContext<"/api/attendance/[i
         ...inProgress,
       ];
     }
-    const s = await Attendance.findByIdAndUpdate(id, { $set: set }, { new: true }).lean();
-    return json({ session: toSession(s) });
+    await Attendance.updateOne({ _id: id }, { $set: set }); // the UI reloads afterwards; nothing to send back
+    return json({ ok: true });
   }
 
   const e = parseEntry(body);
   if (typeof e === "string") return fail(e);
   if (await findOverlap(owner, e, id)) return fail("This overlaps another entry on the same day.", 409);
-  const s = await Attendance.findByIdAndUpdate(
-    id,
-    { $set: { ...e, manual: true }, $unset: { open: "" } },
-    { new: true },
-  ).lean();
-  return json({ session: toSession(s) });
+  await Attendance.updateOne({ _id: id }, { $set: { ...e, manual: true }, $unset: { open: "" } });
+  return json({ ok: true });
 });
 
 /** Delete one of your own finished sessions. */

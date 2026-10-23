@@ -1,14 +1,19 @@
 import { isValidObjectId } from "mongoose";
 import { DATE_RE, fail, json, route } from "@/lib/server/api";
 import { findOverlap, istToday, parseEntry } from "@/lib/server/manual";
-import { User } from "@/models/User";
-import { toSession } from "@/lib/server/serialize";
+import { SESSION_FIELDS, toSession } from "@/lib/server/serialize";
 import { Attendance } from "@/models/Attendance";
+import { User } from "@/models/User";
+
+// The UI reloads after every action and ignores what these return, so they answer { ok: true }
+// and ask the database for just _id (enough to know the update matched).
+const OK = () => json({ ok: true });
 
 /**
  * GET ?from=YYYY-MM-DD&to=YYYY-MM-DD[&userId=<id>|all]
  * Employees always get their own records; admins may pass userId or "all".
  * Any open session in scope is always included, even if it started before `from`.
+ * Returns only the fields the UI reads (see toSession).
  */
 export const GET = route(async (req, me) => {
   const q = new URL(req.url).searchParams;
@@ -25,7 +30,7 @@ export const GET = route(async (req, me) => {
     filter.userId = target;
   }
 
-  const rows = await Attendance.find(filter).sort({ punchIn: 1 }).lean();
+  const rows = await Attendance.find(filter).select(SESSION_FIELDS).sort({ punchIn: 1 }).lean();
   return json({ sessions: rows.map(toSession) });
 });
 
@@ -53,14 +58,14 @@ export const POST = route(async (req, me) => {
       const target = admin && body.userId ? String(body.userId) : me.id;
       if (!isValidObjectId(target) || !(await User.exists({ _id: target }))) return fail("Employee not found.", 404);
       if (await findOverlap(target, e)) return fail("This overlaps another entry on the same day.", 409);
-      const s = await Attendance.create({ userId: target, ...e, manual: true });
-      return json({ session: toSession(s) }, 201);
+      await Attendance.create({ userId: target, ...e, manual: true });
+      return json({ ok: true }, 201);
     }
     case "punchIn": {
       if (!DATE_RE.test(date ?? "")) return fail("date is required");
       try {
-        const s = await Attendance.create({ userId: me.id, date, punchIn: now, open: true, breaks: [] });
-        return json({ session: toSession(s) }, 201);
+        await Attendance.create({ userId: me.id, date, punchIn: now, open: true, breaks: [] });
+        return json({ ok: true }, 201);
       } catch (e) {
         if ((e as { code?: number }).code === 11000) return fail("You are already punched in.", 409);
         throw e;
@@ -71,8 +76,10 @@ export const POST = route(async (req, me) => {
         mine,
         { $set: { punchOut: now, "breaks.$[b].end": now }, $unset: { open: "" } },
         { new: true, ...endOpenBreaks },
-      ).lean();
-      return s ? json({ session: toSession(s) }) : fail("You are not punched in.", 409);
+      )
+        .select("_id")
+        .lean();
+      return s ? OK() : fail("You are not punched in.", 409);
     }
     case "startBreak": {
       if (!isValidObjectId(breakTarget)) return fail("Invalid userId");
@@ -80,8 +87,10 @@ export const POST = route(async (req, me) => {
         { ...theirs, breaks: { $not: { $elemMatch: { end: { $exists: false } } } } },
         { $push: { breaks: { start: now } } },
         { new: true },
-      ).lean();
-      return s ? json({ session: toSession(s) }) : fail("Cannot start a break right now.", 409);
+      )
+        .select("_id")
+        .lean();
+      return s ? OK() : fail("Cannot start a break right now.", 409);
     }
     case "endBreak": {
       if (!isValidObjectId(breakTarget)) return fail("Invalid userId");
@@ -91,8 +100,10 @@ export const POST = route(async (req, me) => {
         { ...theirs, breaks: { $elemMatch: { end: { $exists: false } } } },
         { $set: { "breaks.$[b].end": now } },
         { new: true, ...endOpenBreaks },
-      ).lean();
-      return s ? json({ session: toSession(s) }) : fail("You are not on a break.", 409);
+      )
+        .select("_id")
+        .lean();
+      return s ? OK() : fail("You are not on a break.", 409);
     }
     default:
       return fail("Unknown action");

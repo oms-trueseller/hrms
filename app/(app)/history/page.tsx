@@ -8,7 +8,7 @@ import { buildMonth, deleteEntry, summarizeMonth, useAttendance } from "@/lib/at
 import { errorMessage } from "@/lib/api";
 import type { Session } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
-import { useLeaves } from "@/lib/leaves";
+import { useLeaveSpans } from "@/lib/leaves";
 import { dateKey, formatDelta, formatHM, formatTime, monthKey, useNow } from "@/lib/time";
 
 // Set to true to show the "+ Add / update entry" button for backfilling past days.
@@ -24,7 +24,7 @@ export default function HistoryPage() {
   const now = useNow();
   const [month, setMonth] = useState(() => monthKey(Date.now()));
   const { sessions } = useAttendance({ from: `${month}-01`, to: `${month}-31` });
-  const { leaves } = useLeaves();
+  const leaves = useLeaveSpans();
   // null = closed; otherwise the date to prefill, plus the session when editing.
   const [dialog, setDialog] = useState<{ date: string; session?: Session } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);

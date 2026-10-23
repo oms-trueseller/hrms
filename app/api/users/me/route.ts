@@ -1,5 +1,6 @@
 import { fail, json, route } from "@/lib/server/api";
-import { toUser } from "@/lib/server/serialize";
+import { invalidateMe } from "@/lib/server/auth";
+import { toUser, USER_FIELDS } from "@/lib/server/serialize";
 import { User } from "@/models/User";
 
 export const PATCH = route(async (req, me) => {
@@ -9,6 +10,8 @@ export const PATCH = route(async (req, me) => {
     if (typeof b[k] === "string") patch[k] = b[k].trim();
   }
   if ("name" in patch && !patch.name) return fail("Name is required");
-  const user = await User.findByIdAndUpdate(me.id, patch, { new: true }).lean();
+  // The Profile page needs the whole profile back to refresh its cache.
+  const user = await User.findByIdAndUpdate(me.id, patch, { new: true }).select(USER_FIELDS).lean();
+  invalidateMe(me.id);
   return json({ user: toUser(user) });
 });

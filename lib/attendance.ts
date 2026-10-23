@@ -3,7 +3,7 @@
 import useSWR from "swr";
 import { api, refresh } from "./api";
 import { dateKey, daysInMonth, fromIST, weekday } from "./time";
-import type { Leave, Session } from "./types";
+import type { LeaveSpan, Session } from "./types";
 
 /** Work policy: 8h net work per day, up to 1h of break allowed, 176h net per month. */
 export const DAY_TARGET_MS = 8 * 3600_000;
@@ -36,14 +36,13 @@ export async function attendanceAction(action: Action, userId?: string) {
 export const activeSession = (sessions: Session[], userId: string) =>
   sessions.find((s) => s.userId === userId && !s.punchOut);
 
-export const onBreak = (s: Session) => s.breaks.some((b) => !b.end);
+/** A break is running right now. */
+export const onBreak = (s: Session) => !!s.breakStart;
 
+/** Break time so far: finished breaks plus the one running now (if any). */
 export function breakMs(s: Session, now: number): number {
-  const stop = s.punchOut ? new Date(s.punchOut).getTime() : now;
-  return s.breaks.reduce((sum, b) => {
-    const end = b.end ? new Date(b.end).getTime() : stop;
-    return sum + Math.max(0, end - new Date(b.start).getTime());
-  }, 0);
+  const running = s.breakStart ? Math.max(0, now - new Date(s.breakStart).getTime()) : 0;
+  return s.breakMs + running;
 }
 
 /** Worked time excluding breaks. */
@@ -86,7 +85,7 @@ export interface DaySummary {
 export function summarizeDay(
   date: string,
   daySessions: Session[],
-  leaves: Leave[],
+  leaves: LeaveSpan[],
   now: number,
   userId?: string,
 ): DaySummary {
@@ -135,7 +134,7 @@ export function summarizeDay(
 export function buildMonth(
   month: string,
   userSessions: Session[],
-  userLeaves: Leave[],
+  userLeaves: LeaveSpan[],
   now: number,
 ): DaySummary[] {
   const today = dateKey(now);

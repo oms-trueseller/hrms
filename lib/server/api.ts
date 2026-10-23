@@ -12,7 +12,7 @@ export function route<C = unknown>(handler: Handler<C>, opts: { admin?: boolean 
   return async (req: Request, ctx: C) => {
     try {
       await connectDB();
-      const me = await getMe();
+      const me = await getMe({ fresh: opts.admin }); // admin-only routes always re-check the role in the DB
       if (!me) return fail("Not authenticated", 401);
       if (opts.admin && me.role !== "admin") return fail("Admin access required", 403);
       return await handler(req, me, ctx);

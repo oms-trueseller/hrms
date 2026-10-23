@@ -1,5 +1,6 @@
 export type Role = "admin" | "employee";
 
+/** Full profile: returned by login, signup and /api/auth/me (the Profile page uses every field). */
 export interface User {
   id: string;
   name: string;
@@ -11,33 +12,41 @@ export interface User {
   joinedAt: string; // ISO
 }
 
-export interface Break {
-  start: string; // ISO
-  end?: string;
-}
+/** Admin employee list: the fields that page shows (no phone). */
+export type UserListItem = Omit<User, "phone">;
 
-/** One punch-in/punch-out pair. A day can have several. */
+/**
+ * One punch-in/punch-out pair. A day can have several.
+ * Breaks are sent as totals, not as a list: the UI only needs the time already taken and whether
+ * a break is running right now.
+ */
 export interface Session {
   id: string;
   userId: string;
-  date: string; // YYYY-MM-DD (local) of punch in
+  date: string; // YYYY-MM-DD (IST) of punch in
   punchIn: string; // ISO
   punchOut?: string;
-  breaks: Break[];
-  /** Entered or edited by hand (not live punches). */
-  manual?: boolean;
+  /** Total of finished breaks, in ms. */
+  breakMs: number;
+  /** Start of the break running right now (ISO), if any. */
+  breakStart?: string;
 }
 
 export type LeaveType = "Casual" | "Sick" | "Paid" | "Unpaid";
 export type LeaveStatus = "pending" | "approved" | "rejected";
 
-export interface Leave {
-  id: string;
-  userId: string;
-  type: LeaveType;
+/** Just the dates and status: enough to mark days "On leave". */
+export interface LeaveSpan {
   from: string; // YYYY-MM-DD
   to: string;
-  reason: string;
   status: LeaveStatus;
-  createdAt: string;
+  /** Present on the admin all-employees list. */
+  userId?: string;
+}
+
+/** A leave request as listed on the Leaves pages. `userId` is only sent on the admin list. */
+export interface Leave extends LeaveSpan {
+  id: string;
+  type: LeaveType;
+  reason: string;
 }

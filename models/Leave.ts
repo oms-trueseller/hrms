@@ -15,6 +15,8 @@ const leaveSchema = new Schema(
 
 // "My leaves", newest first.
 leaveSchema.index({ userId: 1, createdAt: -1 });
+// Admin "all leaves" list (newest first) without a collection scan + sort.
+leaveSchema.index({ createdAt: -1 });
 // Admin approval queue.
 leaveSchema.index({ status: 1, createdAt: -1 });
 

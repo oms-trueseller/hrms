@@ -36,12 +36,7 @@ export default function EntryDialog({
   const [outTime, setOut] = useState(session ? (session.punchOut ? toHHMM(session.punchOut) : "") : "18:00");
   const [brk, setBrk] = useState(() => {
     if (!session) return 60;
-    return Math.round(
-      session.breaks.reduce(
-        (n, b) => n + (b.end ? new Date(b.end).getTime() - new Date(b.start).getTime() : 0),
-        0,
-      ) / 60000,
-    );
+    return Math.round(session.breakMs / 60000); // finished breaks only; a running break is left as is
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

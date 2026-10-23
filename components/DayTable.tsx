@@ -6,9 +6,6 @@ import type { Session } from "@/lib/types";
 import { formatDate, formatDelta, formatHM, formatTime } from "@/lib/time";
 import { Badge, Empty } from "./ui";
 
-// Set to true to label hand-entered sessions with a "manual entry" tag.
-const SHOW_MANUAL_TAG = false;
-
 function Delta({ ms }: { ms: number | null }) {
   if (ms === null) return <span className="text-muted">in progress</span>;
   if (Math.abs(ms) < 60_000) return <span className="text-muted">On target</span>;
@@ -129,7 +126,6 @@ export default function DayTable({
                             </span>
                             <span>break {formatHM(breakMs(s, now))}</span>
                             <span>worked {formatHM(workedMs(s, now))}</span>
-                            {SHOW_MANUAL_TAG && s.manual && <span className="text-xs font-medium text-amber-600">manual entry</span>}
                             {onEdit && (canEdit ? canEdit(s) : true) && (
                               <span className="ml-auto flex gap-3">
                                 <button className="text-accent" onClick={() => onEdit(s)}>Edit</button>

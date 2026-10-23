@@ -13,5 +13,8 @@ const userSchema = new Schema(
   { timestamps: true },
 );
 
+// Admin employee list sorted by join date.
+userSchema.index({ createdAt: 1 });
+
 export type UserDoc = InferSchemaType<typeof userSchema>;
 export const User = mongoose.models.User ?? mongoose.model("User", userSchema);

@@ -3,7 +3,7 @@
 import useSWR from "swr";
 import { api, errorMessage, refresh } from "./api";
 import { parseKey } from "./time";
-import type { Leave, LeaveStatus, LeaveType } from "./types";
+import type { Leave, LeaveSpan, LeaveStatus, LeaveType } from "./types";
 
 export const LEAVE_TYPES: LeaveType[] = ["Casual", "Sick", "Paid", "Unpaid"];
 /** Annual allowance in days. Unpaid has no cap. */
@@ -13,6 +13,15 @@ export const LEAVE_QUOTA: Partial<Record<LeaveType, number>> = { Casual: 12, Sic
 export function useLeaves(all = false) {
   const { data } = useSWR<{ leaves: Leave[] }>(all ? "/api/leaves?scope=all" : "/api/leaves", api);
   return { leaves: data?.leaves ?? [], ready: !!data };
+}
+
+/**
+ * Approved leaves as plain date ranges, for marking days "On leave" (Dashboard, History, All attendance).
+ * Much smaller than the full list. With `all` (admin) each carries userId.
+ */
+export function useLeaveSpans(all = false) {
+  const { data } = useSWR<{ leaves: LeaveSpan[] }>(all ? "/api/leaves?view=calendar&scope=all" : "/api/leaves?view=calendar", api);
+  return data?.leaves ?? [];
 }
 
 export function leaveDays(l: Pick<Leave, "from" | "to">): number {

@@ -2,7 +2,7 @@
 
 import useSWR, { mutate } from "swr";
 import { api, errorMessage, refresh } from "./api";
-import type { Role, User } from "./types";
+import type { Role, User, UserListItem } from "./types";
 
 const ME = "/api/auth/me";
 
@@ -13,7 +13,7 @@ export function useAuth() {
 
 /** All employees (admin only). Polls so live-status pages stay fresh. */
 export function useUsers(refreshInterval = 0) {
-  const { data } = useSWR<{ users: User[] }>("/api/users", api, { refreshInterval });
+  const { data } = useSWR<{ users: UserListItem[] }>("/api/users", api, { refreshInterval });
   return data?.users ?? [];
 }
 

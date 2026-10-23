@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui";
 import { summarizeDay, useAttendance, type DaySummary } from "@/lib/attendance";
 import { useUsers } from "@/lib/auth";
 import type { Session } from "@/lib/types";
-import { useLeaves } from "@/lib/leaves";
+import { useLeaveSpans } from "@/lib/leaves";
 import { dateKey, useNow } from "@/lib/time";
 
 export default function AllAttendancePage() {
@@ -17,7 +17,7 @@ export default function AllAttendancePage() {
   const [date, setDate] = useState(() => dateKey(Date.now()));
   const [employee, setEmployee] = useState("all");
   const { sessions } = useAttendance({ from: date, to: date, userId: employee });
-  const { leaves } = useLeaves(true);
+  const leaves = useLeaveSpans(true);
   // Entry being added (no session) or edited, for one employee on the chosen date.
   const [dialog, setDialog] = useState<{ userId: string; session?: Session } | null>(null);
 

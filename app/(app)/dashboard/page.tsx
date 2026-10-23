@@ -17,7 +17,7 @@ import {
   DAY_TARGET_MS,
 } from "@/lib/attendance";
 import { useAuth } from "@/lib/auth";
-import { useLeaves } from "@/lib/leaves";
+import { useLeaveSpans } from "@/lib/leaves";
 import { errorMessage } from "@/lib/api";
 import { dateKey, formatClock, formatDelta, formatHM, formatLongDate, formatTime, hourIST, monthKey, addDays, weekday, useNow } from "@/lib/time";
 
@@ -31,7 +31,7 @@ export default function Dashboard() {
     from: weekStart < monthStart ? weekStart : monthStart,
     to: today,
   });
-  const { leaves: myLeaves } = useLeaves();
+  const myLeaves = useLeaveSpans();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
