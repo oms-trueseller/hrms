@@ -47,7 +47,7 @@ export default function ProfilePage() {
         </div>
         <div className="flex items-center gap-3">
           <button className="btn btn-primary">Save changes</button>
-          {saved && <span className="text-sm text-emerald-600">Saved</span>}
+          {saved && <span className="text-sm text-emerald-600 dark:text-emerald-400">Saved</span>}
         </div>
       </form>
     </>

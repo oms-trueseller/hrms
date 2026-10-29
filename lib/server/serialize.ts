@@ -32,14 +32,19 @@ export const toUserListItem = (u: any): UserListItem => ({
 });
 
 /** Fields to select for toSession. */
-export const SESSION_FIELDS = "userId date punchIn punchOut breaks longBreaks";
+// `open` and `autoBreak` are read only to decide whether the automatic break is due; they are not sent on.
+export const SESSION_FIELDS = "userId date punchIn punchOut open autoBreak breaks longBreaks";
 
 export const toSession = (s: any): Session => {
   let breakMs = 0;
   let breakStart: string | undefined;
+  let breakAuto = false;
   for (const b of s.breaks ?? []) {
     if (b.end) breakMs += new Date(b.end).getTime() - new Date(b.start).getTime();
-    else breakStart = iso(b.start);
+    else {
+      breakStart = iso(b.start);
+      breakAuto = !!b.auto;
+    }
   }
   return {
     id: String(s._id),
@@ -49,6 +54,7 @@ export const toSession = (s: any): Session => {
     punchOut: iso(s.punchOut),
     breakMs,
     breakStart,
+    ...(breakAuto ? { breakAuto } : {}),
     ...(s.longBreaks?.length
       ? {
           longBreaks: s.longBreaks.map((l: any) => ({

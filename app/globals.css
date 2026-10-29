@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f5f6fa;
-  --foreground: #171923;
+  --background: #f4f4f5;
+  --foreground: #09090b;
   --surface: #ffffff;
-  --border: #e3e6ee;
-  --muted: #6b7280;
-  --accent: #4f46e5;
+  --border: #e4e4e7;
+  --muted: #71717a;
+  --accent: #0369a1; /* blue */
   --accent-fg: #ffffff;
   /* Makes native controls (time/date pickers, scrollbars) match the theme. */
   color-scheme: light;
@@ -26,13 +26,13 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0d0f16;
-    --foreground: #eceef5;
-    --surface: #161924;
-    --border: #272b3a;
-    --muted: #9aa1b5;
-    --accent: #7c75ff;
-    --accent-fg: #0d0f16;
+    --background: #1c1d21;
+    --foreground: #eceef2;
+    --surface: #141518;
+    --border: #2b2d33;
+    --muted: #9ba0ab;
+    --accent: #38bdf8; /* blue */
+    --accent-fg: #04121b;
     color-scheme: dark;
   }
 }
@@ -63,13 +63,13 @@ body {
     @apply inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium transition hover:bg-background disabled:opacity-50;
   }
   .btn-primary {
-    @apply border-transparent bg-accent text-accent-fg hover:bg-accent/90;
+    @apply border-transparent bg-gradient-to-r from-sky-500 to-blue-600 text-white hover:brightness-110;
   }
   .btn-danger {
-    @apply border-transparent bg-red-600 text-white hover:bg-red-600/90;
+    @apply border-transparent bg-rose-700 text-white hover:bg-rose-600;
   }
   .th {
-    @apply px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted;
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-foreground/70;
   }
   .td {
     @apply px-4 py-3 text-sm;

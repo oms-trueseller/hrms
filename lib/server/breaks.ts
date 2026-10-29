@@ -1,7 +1,7 @@
 import { Attendance } from "@/models/Attendance";
 
-/** A day's total break above this needs a reason when the break ends. (Testing value: 60 min; planned 70 min.) */
-export const BREAK_REASON_MS = 60 * 60_000;
+/** A day's total break above this (65 min) needs a reason when the break ends. Keep equal to lib/attendance.ts. */
+export const BREAK_REASON_MS = 65 * 60_000;
 export const REASON_MAX = 200;
 export const REASON_MIN = 3;
 

@@ -38,6 +38,8 @@ export interface Session {
   breakMs: number;
   /** Start of the break running right now (ISO), if any. */
   breakStart?: string;
+  /** The running break started by itself (at the automatic break time). */
+  breakAuto?: boolean;
   /** Reasons for long breaks. Only present when there are any. */
   longBreaks?: LongBreak[];
 }

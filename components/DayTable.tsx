@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { BREAK_ALLOWED_MS, breakMs, workedMs, type DaySummary } from "@/lib/attendance";
+import { activeReasons, BREAK_ALLOWED_MS, breakMs, workedMs, type DaySummary } from "@/lib/attendance";
 import type { Session } from "@/lib/types";
 import { formatDate, formatDelta, formatHM, formatTime } from "@/lib/time";
 import { Badge, Empty } from "./ui";
@@ -9,11 +9,15 @@ import { Badge, Empty } from "./ui";
 function Delta({ ms }: { ms: number | null }) {
   if (ms === null) return <span className="text-muted">in progress</span>;
   if (Math.abs(ms) < 60_000) return <span className="text-muted">On target</span>;
-  return (
-    <span className={`font-medium ${ms > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-      {formatDelta(ms)}
-    </span>
-  );
+  if (ms > 0) {
+    // More than 8h worked = overtime (OT).
+    return (
+      <span className="font-medium text-emerald-600 dark:text-emerald-400" title="Overtime">
+        {formatDelta(ms)} <span className="text-[10px] font-semibold tracking-wide">OT</span>
+      </span>
+    );
+  }
+  return <span className="font-medium text-red-600 dark:text-red-400">{formatDelta(ms)}</span>;
 }
 
 export default function DayTable({
@@ -47,7 +51,7 @@ export default function DayTable({
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[860px]">
-        <thead className="border-b border-border">
+        <thead className="border-b border-border bg-foreground/[0.04]">
           <tr>
             <th className="th">Date</th>
             {showName && <th className="th">Employee</th>}
@@ -66,7 +70,7 @@ export default function DayTable({
             const key = r.date + (r.userId ?? "");
             const expandable = r.sessions.length > 0;
             const has = r.sessions.length > 0;
-            const reasons = r.sessions.flatMap((s) => s.longBreaks ?? []);
+            const reasons = activeReasons(r.sessions, now);
             const editable = onEdit ? r.sessions.filter((s) => (canEdit ? canEdit(s) : true)) : [];
             return (
               <Fragment key={key}>

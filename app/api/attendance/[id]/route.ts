@@ -41,7 +41,7 @@ export const PATCH = route(async (req, me, ctx: RouteContext<"/api/attendance/[i
     if (await findOverlap(owner, { date, punchIn, punchOut: now, breaks: [] }, id)) {
       return fail("This overlaps another entry on the same day.", 409);
     }
-    const set: Record<string, unknown> = { date, punchIn, manual: true };
+    let finishedBreak: { start: Date; end: Date }[] | null = null; // null = leave the breaks alone
     if (body.breakMinutes !== undefined) {
       const breakMin = Number(body.breakMinutes);
       if (!Number.isFinite(breakMin) || breakMin < 0) return fail("Break must be 0 or more minutes.");
@@ -51,12 +51,36 @@ export const PATCH = route(async (req, me, ctx: RouteContext<"/api/attendance/[i
       const available = limit - punchIn.getTime();
       if (breakMin * 60_000 > available) return fail("Break cannot be longer than the time since the in time.");
       const start = punchIn.getTime() + (available - breakMin * 60_000) / 2;
-      set.breaks = [
-        ...(breakMin > 0 ? [{ start: new Date(start), end: new Date(start + breakMin * 60_000) }] : []),
-        ...inProgress,
-      ];
+      finishedBreak = breakMin > 0 ? [{ start: new Date(start), end: new Date(start + breakMin * 60_000) }] : [];
     }
-    await Attendance.updateOne({ _id: id }, { $set: set }); // the UI reloads afterwards; nothing to send back
+    // One atomic update that works on the breaks as they are *now*. (Reading them here and writing a whole new
+    // list back would wipe a break that was added in between, such as the automatic 1 pm break.)
+    // It swaps the finished breaks for the new block and keeps any break that has no end time.
+    await Attendance.updateOne({ _id: id }, [
+      {
+        $set: {
+          date,
+          punchIn,
+          manual: true,
+          ...(finishedBreak
+            ? {
+                breaks: {
+                  $concatArrays: [
+                    { $literal: finishedBreak },
+                    {
+                      $filter: {
+                        input: { $ifNull: ["$breaks", []] },
+                        as: "b",
+                        cond: { $not: [{ $gt: ["$$b.end", null] }] }, // no end time yet = still running
+                      },
+                    },
+                  ],
+                },
+              }
+            : {}),
+        },
+      },
+    ], { updatePipeline: true }); // the UI reloads afterwards; nothing to send back
     return json({ ok: true });
   }
 

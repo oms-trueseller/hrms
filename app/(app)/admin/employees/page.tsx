@@ -5,6 +5,7 @@ import AdminOnly from "@/components/AdminOnly";
 import ReasonDialog from "@/components/ReasonDialog";
 import { Badge, PageHeader } from "@/components/ui";
 import {
+  activeReasons,
   activeSession,
   attendanceAction,
   BREAK_REASON_MS,
@@ -27,18 +28,33 @@ export default function EmployeesPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Set while the "why was the break long?" dialog is open for an employee.
-  const [ask, setAsk] = useState<{ userId: string; name: string; totalMs: number } | null>(null);
+  const [ask, setAsk] = useState<{ userId: string; name: string; totalMs: number; action: "endBreak" | "punchOut" } | null>(null);
 
-  async function breakAction(userId: string, name: string, action: "startBreak" | "endBreak", totalMs: number) {
-    // Ending a break that takes the day past the limit needs a reason; the admin writes it on their behalf.
-    if (action === "endBreak" && totalMs > BREAK_REASON_MS) return setAsk({ userId, name, totalMs });
+  /**
+   * Punch in/out or break for an employee: an admin can do all of these for anyone. Ending a break (or
+   * punching out on one) that takes the day past the limit needs a reason; the admin writes it on their behalf.
+   */
+  async function act(
+    userId: string,
+    name: string,
+    action: "punchIn" | "startBreak" | "endBreak" | "punchOut",
+    totalMs: number,
+    onBreakNow: boolean,
+  ) {
+    if (action === "punchOut" && !confirm(`Punch out ${name} now?`)) return;
+    if (action === "punchIn" && !confirm(`Punch in ${name} now?`)) return;
+    const endsBreak = action === "endBreak" || (action === "punchOut" && onBreakNow);
+    if (endsBreak && totalMs > BREAK_REASON_MS && (action === "endBreak" || action === "punchOut")) {
+      return setAsk({ userId, name, totalMs, action });
+    }
     setBusyId(userId);
     setError(null);
     try {
       await attendanceAction(action, userId);
     } catch (e) {
-      if (e instanceof ApiError && e.code === "REASON_REQUIRED") setAsk({ userId, name, totalMs });
-      else setError(errorMessage(e));
+      if (e instanceof ApiError && e.code === "REASON_REQUIRED" && (action === "endBreak" || action === "punchOut")) {
+        setAsk({ userId, name, totalMs, action });
+      } else setError(errorMessage(e));
     } finally {
       setBusyId(null);
     }
@@ -49,8 +65,8 @@ export default function EmployeesPage() {
       <PageHeader title="Employees" subtitle={`${users.length} registered · live status`} />
       {error && <p role="alert" className="mb-3 text-sm text-red-600">{error}</p>}
       <section className="card overflow-x-auto p-0">
-        <table className="w-full min-w-[860px]">
-          <thead className="border-b border-border">
+        <table className="w-full min-w-[960px]">
+          <thead className="border-b border-border bg-foreground/[0.04]">
             <tr>
               <th className="th">Employee</th>
               <th className="th">Department</th>
@@ -58,6 +74,7 @@ export default function EmployeesPage() {
               <th className="th">Status</th>
               <th className="th">Today</th>
               <th className="th">Break</th>
+              <th className="th">Punch</th>
               <th className="th">Role</th>
             </tr>
           </thead>
@@ -67,7 +84,7 @@ export default function EmployeesPage() {
               const todays = sessions.filter((s) => s.userId === u.id && s.date === today);
               const ms = todays.reduce((n, s) => n + workedMs(s, now), 0);
               const breakTotal = todays.reduce((n, s) => n + breakMs(s, now), 0);
-              const reasons = todays.flatMap((s) => s.longBreaks ?? []);
+              const reasons = activeReasons(todays, now);
               return (
                 <tr key={u.id}>
                   <td className="td">
@@ -95,13 +112,32 @@ export default function EmployeesPage() {
                         <button
                           className="btn px-3 py-1"
                           disabled={busyId === u.id}
-                          onClick={() => breakAction(u.id, u.name, onBreak(active) ? "endBreak" : "startBreak", breakTotal)}
+                          onClick={() => act(u.id, u.name, onBreak(active) ? "endBreak" : "startBreak", breakTotal, onBreak(active))}
                         >
                           {onBreak(active) ? "End break" : "Start break"}
                         </button>
                       </div>
                     ) : (
                       <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="td whitespace-nowrap">
+                    {active ? (
+                      <button
+                        className="btn px-3 py-1 text-rose-600 dark:text-rose-400"
+                        disabled={busyId === u.id}
+                        onClick={() => act(u.id, u.name, "punchOut", breakTotal, onBreak(active))}
+                      >
+                        Punch out
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn-primary px-3 py-1"
+                        disabled={busyId === u.id}
+                        onClick={() => act(u.id, u.name, "punchIn", breakTotal, false)}
+                      >
+                        Punch in
+                      </button>
                     )}
                   </td>
                   <td className="td">
@@ -126,9 +162,9 @@ export default function EmployeesPage() {
         <ReasonDialog
           totalMs={ask.totalMs}
           who={ask.name}
-          confirmLabel="End break"
+          confirmLabel={ask.action === "punchOut" ? "Punch out" : "End break"}
           onSubmit={async (reason) => {
-            await attendanceAction("endBreak", ask.userId, reason);
+            await attendanceAction(ask.action, ask.userId, reason);
             setAsk(null);
           }}
           onClose={() => setAsk(null)}

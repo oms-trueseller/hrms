@@ -3,19 +3,28 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
+import {
+  IconCalendar,
+  IconCheckCircle,
+  IconClipboard,
+  IconDashboard,
+  IconHistory,
+  IconUser,
+  IconUsers,
+} from "@/components/icons";
 import { logout, useAuth } from "@/lib/auth";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/history", label: "Attendance history" },
-  { href: "/leaves", label: "Leaves" },
-  { href: "/profile", label: "Profile" },
+  { href: "/dashboard", label: "Dashboard", Icon: IconDashboard },
+  { href: "/history", label: "Attendance history", Icon: IconHistory },
+  { href: "/leaves", label: "Leaves", Icon: IconCalendar },
+  { href: "/profile", label: "Profile", Icon: IconUser },
 ];
 
 const ADMIN_NAV = [
-  { href: "/admin/employees", label: "Employees" },
-  { href: "/admin/attendance", label: "All attendance" },
-  { href: "/admin/leaves", label: "Leave approvals" },
+  { href: "/admin/employees", label: "Employees", Icon: IconUsers },
+  { href: "/admin/attendance", label: "All attendance", Icon: IconClipboard },
+  { href: "/admin/leaves", label: "Leave approvals", Icon: IconCheckCircle },
 ];
 
 const noopSubscribe = () => () => {};
@@ -50,10 +59,14 @@ export default function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex flex-1 flex-col md:flex-row">
-      <aside className="border-b border-border bg-surface md:w-60 md:border-r md:border-b-0">
-        <div className="flex items-center justify-between px-5 py-4 md:block">
-          <p className="text-lg font-semibold tracking-tight">
-            <span className="text-accent">●</span> HRMS
+      {/* On desktop the sidebar stays put while the page scrolls; it scrolls by itself only if it is taller than the screen. */}
+      <aside className="border-b border-border bg-surface md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col md:self-start md:overflow-y-auto md:border-r md:border-b-0">
+        <div className="flex shrink-0 items-center justify-between px-5 py-4 md:block">
+          <p className="flex items-center gap-2.5 text-lg font-semibold tracking-tight">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-sky-400 to-emerald-400 text-sm font-bold text-black">
+              H
+            </span>
+            HRMS
           </p>
           <button
             onClick={() => {
@@ -65,23 +78,26 @@ export default function Shell({ children }: { children: ReactNode }) {
             Log out
           </button>
         </div>
-        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:pb-0">
+        <nav className="flex shrink-0 gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:overflow-x-visible md:pb-0">
           {items.map((i) => {
             const active = pathname === i.href;
             return (
               <Link
                 key={i.href}
                 href={i.href}
-                className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  active ? "bg-accent/15 text-accent" : "text-muted hover:bg-background hover:text-foreground"
+                className={`flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  active
+                    ? "bg-foreground/[0.08] text-foreground shadow-[inset_3px_0_0_0_var(--accent)]"
+                    : "text-muted hover:bg-foreground/5 hover:text-foreground"
                 }`}
               >
+                <i.Icon className={`h-[18px] w-[18px] ${active ? "text-accent" : ""}`} />
                 {i.label}
               </Link>
             );
           })}
         </nav>
-        <div className="mt-6 hidden border-t border-border p-4 md:block">
+        <div className="mt-6 hidden shrink-0 border-t border-border p-4 md:mt-auto md:block">
           <p className="truncate text-sm font-medium">{user.name}</p>
           <p className="truncate text-xs text-muted">
             {user.email} · {user.role}

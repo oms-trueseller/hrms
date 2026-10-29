@@ -12,7 +12,14 @@ const attendanceSchema = new Schema(
     open: { type: Boolean },
     // True when the times were entered/edited by hand instead of punched live.
     manual: { type: Boolean },
-    breaks: [{ _id: false, start: { type: Date, required: true }, end: Date }],
+    // `auto` marks the break that started by itself at the automatic break time.
+    breaks: [{ _id: false, start: { type: Date, required: true }, end: Date, auto: Boolean }],
+    // Set when an admin punched the employee in (who did it).
+    openedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    // Set when an admin punched the employee out (who did it).
+    closedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    // True once this session has had its automatic break (so it is never added twice).
+    autoBreak: { type: Boolean },
     // Reasons given for breaks that took the day total past the limit. Kept apart from `breaks`,
     // so hand-edits to break totals never erase them.
     longBreaks: [

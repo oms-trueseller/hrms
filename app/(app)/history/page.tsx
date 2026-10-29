@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import DayTable from "@/components/DayTable";
+import { IconBriefcase, IconMinus, IconPlus, IconTrend } from "@/components/icons";
 import { PageHeader, Stat } from "@/components/ui";
 import EntryDialog from "@/components/EntryDialog";
 import { buildMonth, deleteEntry, summarizeMonth, useAttendance } from "@/lib/attendance";
@@ -100,24 +101,32 @@ export default function HistoryPage() {
           </p>
         </div>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-background">
-          <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+          <div className={`h-full rounded-full ${pct >= 100 ? "bg-gradient-to-r from-emerald-500 to-emerald-300" : "bg-gradient-to-r from-sky-500 to-cyan-300"}`} style={{ width: `${pct}%` }} />
         </div>
       </section>
 
       <section className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat
           label="Total working hours"
+          icon={<IconBriefcase />}
+          color="sky"
           value={formatHM(sum.workedMs)}
           hint={`${formatHM(sum.expectedSoFarMs)} expected ${sum.balanceMs < 0 ? "−" : "+"} ${formatHM(Math.abs(sum.balanceMs))} net`}
         />
-        <Stat label="Extra time" value={formatHM(sum.extraMs)} hint="Worked beyond 8h on a day" />
+        <Stat label="Extra time" value={formatHM(sum.extraMs)} hint="Worked beyond 8h on a day" icon={<IconPlus />} color="emerald" tone={sum.extraMs > 0 ? "good" : undefined} />
         <Stat
           label="Short time"
+          icon={<IconMinus />}
+          color="rose"
+          tone={sum.shortMs > 0 ? "bad" : undefined}
           value={formatHM(sum.shortMs)}
           hint={sum.absentDays ? `Includes ${sum.absentDays} absent day(s) × 8h` : "Worked under 8h on a day"}
         />
         <Stat
           label="Net extra / short"
+          icon={<IconTrend />}
+          color={sum.balanceMs >= 0 ? "emerald" : "rose"}
+          tone={sum.balanceMs > 0 ? "good" : sum.balanceMs < 0 ? "bad" : undefined}
           value={formatDelta(sum.balanceMs)}
           hint={`${formatHM(sum.extraMs)} extra − ${formatHM(sum.shortMs)} short`}
         />

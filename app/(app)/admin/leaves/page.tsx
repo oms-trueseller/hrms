@@ -21,7 +21,7 @@ export default function LeaveApprovalsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px]">
-              <thead className="border-b border-border">
+              <thead className="border-b border-border bg-foreground/[0.04]">
                 <tr>
                   <th className="th">Employee</th>
                   <th className="th">Type</th>

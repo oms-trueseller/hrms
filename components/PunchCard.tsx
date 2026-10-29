@@ -8,7 +8,7 @@ import type { LongBreak } from "@/lib/types";
 export type PunchAction = "punchIn" | "punchOut" | "startBreak" | "endBreak";
 
 const PILL = {
-  working: { text: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400", dot: "bg-emerald-500 animate-pulse" },
+  working: { text: "bg-sky-500/15 text-sky-700 dark:text-sky-300", dot: "bg-sky-500 animate-pulse" },
   break: { text: "bg-amber-500/15 text-amber-600 dark:text-amber-400", dot: "bg-amber-500 animate-pulse" },
   out: { text: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400", dot: "bg-zinc-500" },
 } as const;
@@ -59,6 +59,8 @@ export default function PunchCard({
   state,
   since,
   breakSince,
+  breakAuto,
+  autoBreakNote,
   workedMs,
   breakMs,
   busy,
@@ -71,6 +73,10 @@ export default function PunchCard({
   since?: string;
   /** Start of the running break, formatted. */
   breakSince?: string;
+  /** The running break started by itself at the automatic break time. */
+  breakAuto?: boolean;
+  /** Shown under the break meter, e.g. when a break will start automatically. */
+  autoBreakNote?: string;
   workedMs: number;
   breakMs: number;
   busy: boolean;
@@ -82,10 +88,20 @@ export default function PunchCard({
   const clock = formatClock(workedMs);
   const left = Math.max(0, DAY_TARGET_MS - workedMs);
   const reached = left === 0;
+  const overtime = Math.max(0, workedMs - DAY_TARGET_MS);
   const overBreak = breakMs > BREAK_ALLOWED_MS;
   const pill = PILL[state];
   const breakLeft = BREAK_ALLOWED_MS - breakMs;
   const big = "btn rounded-xl py-3 text-base w-full sm:w-auto sm:px-10";
+  // The line along the top edge shows the state at a glance.
+  const topLine =
+    state === "break"
+      ? "from-amber-500 to-amber-300"
+      : state === "out"
+        ? "from-zinc-600 to-zinc-500"
+        : reached
+          ? "from-emerald-500 to-emerald-300"
+          : "from-sky-500 to-sky-300";
 
   return (
     <section
@@ -95,9 +111,10 @@ export default function PunchCard({
           "radial-gradient(70% 90% at 0% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%)",
       }}
     >
+      <span aria-hidden="true" className={`absolute inset-x-0 top-0 z-10 h-0.5 bg-gradient-to-r ${topLine}`} />
       <div className="grid md:grid-cols-[3fr_2fr]">
         {/* ── Work ─────────────────────────────── */}
-        <div className="p-6 sm:p-8">
+        <div className="flex flex-col p-6 sm:p-8">
           <div className="flex items-center justify-between gap-3">
             <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${pill.text}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${pill.dot}`} />
@@ -107,12 +124,18 @@ export default function PunchCard({
           </div>
 
           <p className="mt-6 font-mono font-semibold leading-none tabular-nums tracking-tight" aria-live="off">
-            <span className={`text-6xl sm:text-7xl ${state === "working" ? "text-accent" : ""}`}>{clock.slice(0, 5)}</span>
+            <span
+              className={`text-6xl sm:text-7xl ${
+                reached ? "text-emerald-500 dark:text-emerald-400" : state === "working" ? "text-accent" : ""
+              }`}
+            >{clock.slice(0, 5)}</span>
             <span className="text-3xl text-muted sm:text-4xl">{clock.slice(5)}</span>
           </p>
           <p className="mt-3 text-sm text-muted">
             {reached ? (
-              <span className="font-medium text-emerald-600 dark:text-emerald-400">8h target reached 🎉</span>
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                8h target reached 🎉{overtime >= 60_000 && ` · +${formatHM(overtime)} overtime`}
+              </span>
             ) : (
               <>
                 <span className="font-medium text-foreground">{formatHM(left)}</span> left to reach 8h
@@ -123,12 +146,12 @@ export default function PunchCard({
           <div className="mt-6">
             <Meter
               percent={(workedMs / DAY_TARGET_MS) * 100}
-              fill={reached ? "bg-emerald-500" : "bg-accent"}
+              fill={reached ? "bg-gradient-to-r from-emerald-500 to-emerald-300" : "bg-gradient-to-r from-sky-500 to-cyan-300"}
               ticks={["0h", "2h", "4h", "6h", "8h"]}
             />
           </div>
 
-          <div className="mt-7">
+          <div className="mt-auto pt-7">
             {state === "out" ? (
               <button disabled={busy} className={`${big} btn-primary`} onClick={() => onAction("punchIn")}>
                 {PlayIcon} Punch in
@@ -142,18 +165,22 @@ export default function PunchCard({
         </div>
 
         {/* ── Break ────────────────────────────── */}
-        <div className="border-t border-border bg-background/40 p-6 sm:p-8 md:border-l md:border-t-0">
+        <div className="flex flex-col border-t border-border bg-background/40 p-6 sm:p-8 md:border-l md:border-t-0">
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs font-medium uppercase tracking-wider text-muted">Break</span>
             {state === "break" && (
-              <span className="text-xs font-medium text-amber-600 dark:text-amber-400">since {breakSince}</span>
+              <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                {breakAuto ? `auto-started ${breakSince}` : `since ${breakSince}`}
+              </span>
             )}
           </div>
 
-          <div className={state === "out" ? "opacity-50" : ""}>
+          {/* The clock and bar only appear while a break is running. */}
+          {state === "break" && (
+          <div>
             <p
               className={`mt-6 font-mono text-4xl font-semibold leading-none tabular-nums tracking-tight sm:text-5xl ${
-                overBreak ? "text-amber-500" : state === "break" ? "text-sky-500" : ""
+                overBreak ? "text-rose-500" : "text-amber-500"
               }`}
               aria-live="off"
             >
@@ -161,7 +188,7 @@ export default function PunchCard({
             </p>
             <p className="mt-3 text-sm text-muted">
               {overBreak ? (
-                <span className="font-medium text-amber-600 dark:text-amber-400">
+                <span className="font-medium text-rose-600 dark:text-rose-400">
                   {formatHM(breakMs - BREAK_ALLOWED_MS)} over · not counted as work
                 </span>
               ) : (
@@ -174,11 +201,50 @@ export default function PunchCard({
             <div className="mt-6">
               <Meter
                 percent={(breakMs / BREAK_ALLOWED_MS) * 100}
-                fill={overBreak ? "bg-amber-500" : "bg-sky-500"}
+                fill={overBreak ? "bg-gradient-to-r from-rose-500 to-orange-400" : "bg-gradient-to-r from-amber-500 to-yellow-300"}
                 ticks={["0m", "30m", "1h"]}
               />
             </div>
           </div>
+          )}
+
+          {/* Not on a break: a compact summary of today's break against the allowance. */}
+          {state !== "break" && (
+            <div className={`mt-6 rounded-xl border border-border bg-surface/60 p-4 ${state === "out" ? "opacity-60" : ""}`}>
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-muted">Taken today</p>
+                  <p className="mt-1 text-3xl font-semibold leading-none tabular-nums tracking-tight">{formatHM(breakMs)}</p>
+                </div>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    overBreak
+                      ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                      : "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                  }`}
+                >
+                  {overBreak ? "Limit reached" : `${formatHM(breakLeft)} left`}
+                </span>
+              </div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-border/70">
+                <div
+                  className={`h-full rounded-full transition-[width] duration-700 ease-out ${overBreak ? "bg-gradient-to-r from-rose-500 to-orange-400" : "bg-gradient-to-r from-amber-500 to-yellow-300"}`}
+                  style={{ width: `${Math.min(100, (breakMs / BREAK_ALLOWED_MS) * 100)}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-muted">
+                {formatHM(BREAK_ALLOWED_MS)} allowed per day
+                {overBreak && ` · ${formatHM(breakMs - BREAK_ALLOWED_MS)} over, not counted as work`}
+              </p>
+            </div>
+          )}
+
+          {autoBreakNote && state === "working" && (
+            <p className="mt-4 flex items-start gap-2 text-xs text-muted">
+              <span aria-hidden="true">⏰</span>
+              <span>{autoBreakNote}</span>
+            </p>
+          )}
 
           {reasons && reasons.length > 0 && (
             <ul className="mt-5 space-y-1.5">
@@ -193,9 +259,9 @@ export default function PunchCard({
             </ul>
           )}
 
-          <div className="mt-7">
+          <div className="mt-auto pt-7">
             {state === "out" ? (
-              <p className="text-sm text-muted">Punch in to start a break.</p>
+              <p className="text-center text-sm text-muted sm:text-left">Punch in to start a break.</p>
             ) : (
               <button
                 disabled={busy}

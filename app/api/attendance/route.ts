@@ -1,5 +1,6 @@
 import { isValidObjectId } from "mongoose";
 import { DATE_RE, fail, json, route } from "@/lib/server/api";
+import { applyAutoBreakFor, applyAutoBreakTo } from "@/lib/server/autobreak";
 import { BREAK_REASON_MS, checkBreak, parseReason } from "@/lib/server/breaks";
 import { findOverlap, istToday, parseEntry } from "@/lib/server/manual";
 import { SESSION_FIELDS, toSession } from "@/lib/server/serialize";
@@ -48,6 +49,7 @@ export const GET = route(async (req, me) => {
   }
 
   const rows = await Attendance.find(filter).select(SESSION_FIELDS).sort({ punchIn: 1 }).lean();
+  await applyAutoBreakTo(rows); // starts today's 1 pm break on running sessions that are due
   return json({ sessions: rows.map(toSession) });
 });
 
@@ -59,11 +61,16 @@ export const POST = route(async (req, me) => {
   const body = await req.json();
   const { action, date } = body;
   const now = new Date();
-  const mine = { userId: me.id, open: true };
-  // Break actions: an admin may pass userId to start/end a break for an employee.
+  // Punch in/out and break actions: an admin may pass userId to act for an employee.
   const breakTarget = me.role === "admin" && body.userId ? String(body.userId) : me.id;
   const theirs = { userId: breakTarget, open: true };
   const endOpenBreaks = { arrayFilters: [{ "b.end": { $exists: false } }] };
+
+  // Make sure today's automatic break is in place before acting on breaks or punching out.
+  if (action === "startBreak" || action === "endBreak" || action === "punchOut") {
+    if (!isValidObjectId(breakTarget)) return fail("Invalid userId");
+    await applyAutoBreakFor(breakTarget);
+  }
 
   switch (action) {
     case "manual": {
@@ -79,25 +86,44 @@ export const POST = route(async (req, me) => {
       return json({ ok: true }, 201);
     }
     case "punchIn": {
-      if (!DATE_RE.test(date ?? "")) return fail("date is required");
+      // An admin can punch any employee in (pass userId); the day is taken from the server's IST clock.
+      const forOther = breakTarget !== me.id;
+      if (forOther) {
+        if (!isValidObjectId(breakTarget)) return fail("Invalid userId");
+        if (!(await User.exists({ _id: breakTarget }))) return fail("Employee not found.", 404);
+      } else if (!DATE_RE.test(date ?? "")) return fail("date is required");
       try {
-        await Attendance.create({ userId: me.id, date, punchIn: now, open: true, breaks: [] });
+        await Attendance.create({
+          userId: breakTarget,
+          date: forOther ? istToday() : date,
+          punchIn: now,
+          open: true,
+          breaks: [],
+          ...(forOther ? { openedBy: me.id } : {}),
+        });
         return json({ ok: true }, 201);
       } catch (e) {
-        if ((e as { code?: number }).code === 11000) return fail("You are already punched in.", 409);
+        if ((e as { code?: number }).code === 11000) {
+          return fail(forOther ? "This employee is already punched in." : "You are already punched in.", 409);
+        }
         throw e;
       }
     }
     case "punchOut": {
       // Punching out ends a running break too, so the same long-break rule applies.
+      // An admin can punch out any employee (pass userId); an employee only ever punches themselves out.
       const reason = parseReason(body.reason);
       if (typeof reason === "object") return fail(reason.error);
-      const chk = await checkBreak(me.id, now);
+      const chk = await checkBreak(breakTarget, now);
       if (chk?.needsReason && !reason) return reasonRequired(chk.totalMs);
       const s = await Attendance.findOneAndUpdate(
-        mine,
+        theirs,
         {
-          $set: { punchOut: now, "breaks.$[b].end": now },
+          $set: {
+            punchOut: now,
+            "breaks.$[b].end": now,
+            ...(breakTarget !== me.id ? { closedBy: me.id } : {}),
+          },
           $unset: { open: "" },
           ...(chk?.needsReason ? { $push: { longBreaks: longBreakEntry(now, chk, reason) } } : {}),
         },
@@ -105,7 +131,7 @@ export const POST = route(async (req, me) => {
       )
         .select("_id")
         .lean();
-      return s ? OK() : fail("You are not punched in.", 409);
+      return s ? OK() : fail(breakTarget === me.id ? "You are not punched in." : "This employee is not punched in.", 409);
     }
     case "startBreak": {
       if (!isValidObjectId(breakTarget)) return fail("Invalid userId");

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
-import { Badge, Empty, PageHeader, Stat } from "@/components/ui";
+import { IconBan, IconHeart, IconSun, IconWallet } from "@/components/icons";
+import { Badge, Empty, PageHeader, SectionTitle, Stat, type BadgeColor } from "@/components/ui";
 import { useAttendance, workedMs } from "@/lib/attendance";
 import { useAuth } from "@/lib/auth";
 import {
@@ -16,6 +17,14 @@ import {
 } from "@/lib/leaves";
 import { dateKey, formatDate, useNow } from "@/lib/time";
 import type { Leave, LeaveType } from "@/lib/types";
+
+const LEAVE_ICON: Record<LeaveType, React.ReactNode> = {
+  Casual: <IconSun />,
+  Sick: <IconHeart />,
+  Paid: <IconWallet />,
+  Unpaid: <IconBan />,
+};
+const LEAVE_COLOR: Record<LeaveType, BadgeColor> = { Casual: "amber", Sick: "rose", Paid: "emerald", Unpaid: "slate" };
 
 export default function LeavesPage() {
   const { user } = useAuth();
@@ -82,7 +91,7 @@ export default function LeavesPage() {
       <PageHeader title="Leaves" subtitle="Apply for leave and track approvals. Only working days (Mon–Fri) count." />
 
       {returnedTotal > 0 && (
-        <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+        <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
           <span className="font-semibold">
             You worked a full day on {returnedTotal} approved leave {returnedTotal === 1 ? "day" : "days"}.
           </span>{" "}
@@ -98,18 +107,22 @@ export default function LeavesPage() {
             label={`${t} leave`}
             value={`${LEAVE_QUOTA[t]! - used(t)} left`}
             hint={`${used(t)} of ${LEAVE_QUOTA[t]} used${returnedBy(t) ? ` · ${returnedBy(t)} returned` : ""}`}
+            icon={LEAVE_ICON[t]}
+            color={LEAVE_COLOR[t]}
           />
         ))}
         <Stat
           label="Unpaid leave"
           value={`${used("Unpaid")} taken`}
           hint={returnedBy("Unpaid") ? `${returnedBy("Unpaid")} returned` : undefined}
+          icon={LEAVE_ICON.Unpaid}
+          color={LEAVE_COLOR.Unpaid}
         />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
         <form onSubmit={onSubmit} className="card h-fit space-y-4">
-          <h2 className="font-semibold">Apply for leave</h2>
+          <SectionTitle>Apply for leave</SectionTitle>
           <div>
             <label className="label" htmlFor="type">Type</label>
             <select id="type" name="type" className="input">
@@ -135,13 +148,13 @@ export default function LeavesPage() {
         </form>
 
         <section className="card p-0">
-          <h2 className="px-5 py-4 font-semibold">My requests</h2>
+          <div className="px-5 py-4"><SectionTitle>My requests</SectionTitle></div>
           {mine.length === 0 ? (
             <Empty>No leave requests yet.</Empty>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px]">
-                <thead className="border-y border-border">
+                <thead className="border-y border-border bg-foreground/[0.04]">
                   <tr>
                     <th className="th">Type</th>
                     <th className="th">Dates</th>
@@ -160,7 +173,7 @@ export default function LeavesPage() {
                         <td className="td">
                           <p className="font-medium">{u.counted}</p>
                           {u.returned.length > 0 && (
-                            <p className="mt-0.5 text-xs text-emerald-600 dark:text-emerald-400">
+                            <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-400">
                               Worked a full day on {u.returned.map((d) => formatDate(d).replace(/, \d{4}$/, "")).join(", ")}:
                               not counted
                             </p>

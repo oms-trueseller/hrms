@@ -3,7 +3,7 @@
 import useSWR from "swr";
 import { api, refresh } from "./api";
 import { dateKey, daysInMonth, fromIST, weekday } from "./time";
-import type { LeaveSpan, Session } from "./types";
+import type { LeaveSpan, LongBreak, Session } from "./types";
 
 /** Work policy: 8h net work per day, up to 1h of break allowed, 176h net per month. */
 export const DAY_TARGET_MS = 8 * 3600_000;
@@ -32,8 +32,8 @@ export function useAttendance(range: { from: string; to: string; userId?: string
 
 type Action = "punchIn" | "punchOut" | "startBreak" | "endBreak";
 
-/** A day's total break above this needs a reason when the break ends. Keep equal to the server's value in lib/server/breaks.ts. (Testing value: 60 min; planned 70 min.) */
-export const BREAK_REASON_MS = 60 * 60_000;
+/** A day's total break above this (65 min) needs a reason when the break ends. Keep equal to lib/server/breaks.ts. */
+export const BREAK_REASON_MS = 65 * 60_000;
 
 /**
  * Throws with the server's message on failure. Admins can pass `userId` to start/end a break for an employee.
@@ -42,6 +42,17 @@ export const BREAK_REASON_MS = 60 * 60_000;
 export async function attendanceAction(action: Action, userId?: string, reason?: string) {
   await api("/api/attendance", { method: "POST", body: { action, userId, reason, date: dateKey(Date.now()) } });
   await refresh("/api/attendance");
+}
+
+/**
+ * The long-break reasons to show for one day's sessions, but only while that day's total break is still
+ * over the limit. If the break time is later edited down to the limit or less (for example by an admin),
+ * the note no longer applies, so it is hidden everywhere. It is kept in the database, so it shows again
+ * if the break time goes back over the limit.
+ */
+export function activeReasons(sessions: Session[], now: number): LongBreak[] {
+  const total = sessions.reduce((n, s) => n + breakMs(s, now), 0);
+  return total > BREAK_REASON_MS ? sessions.flatMap((s) => s.longBreaks ?? []) : [];
 }
 
 export const activeSession = (sessions: Session[], userId: string) =>
