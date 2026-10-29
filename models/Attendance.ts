@@ -13,6 +13,11 @@ const attendanceSchema = new Schema(
     // True when the times were entered/edited by hand instead of punched live.
     manual: { type: Boolean },
     breaks: [{ _id: false, start: { type: Date, required: true }, end: Date }],
+    // Reasons given for breaks that took the day total past the limit. Kept apart from `breaks`,
+    // so hand-edits to break totals never erase them.
+    longBreaks: [
+      { _id: false, at: Date, minutes: Number, totalMinutes: Number, reason: { type: String, maxlength: 200 } },
+    ],
   },
   { timestamps: true },
 );

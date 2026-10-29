@@ -66,6 +66,7 @@ export default function DayTable({
             const key = r.date + (r.userId ?? "");
             const expandable = r.sessions.length > 0;
             const has = r.sessions.length > 0;
+            const reasons = r.sessions.flatMap((s) => s.longBreaks ?? []);
             const editable = onEdit ? r.sessions.filter((s) => (canEdit ? canEdit(s) : true)) : [];
             return (
               <Fragment key={key}>
@@ -80,6 +81,14 @@ export default function DayTable({
                   <td className="td tabular-nums">{has ? formatHM(r.grossMs) : "—"}</td>
                   <td className="td tabular-nums">
                     {has ? formatHM(r.breakMs) : "—"}
+                    {reasons.length > 0 && (
+                      <span
+                        className="ml-1 cursor-help text-xs font-medium text-amber-600 dark:text-amber-400"
+                        title={reasons.map((x) => x.reason).join(" | ")}
+                      >
+                        · reason
+                      </span>
+                    )}
                     {r.breakOverMs > 0 && (
                       <span className="ml-1 text-xs font-medium text-amber-600 dark:text-amber-400" title={`Allowed ${formatHM(BREAK_ALLOWED_MS)}`}>
                         +{formatHM(r.breakOverMs)} over
@@ -117,6 +126,21 @@ export default function DayTable({
                 {open === key && (
                   <tr className="bg-background">
                     <td colSpan={cols} className="px-4 py-3">
+                      {reasons.length > 0 && (
+                        <div className="mb-3 space-y-1 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                            Long break {reasons.length > 1 ? "reasons" : "reason"}
+                          </p>
+                          {reasons.map((x) => (
+                            <p key={x.at} className="text-foreground">
+                              “{x.reason}”{" "}
+                              <span className="text-xs text-muted">
+                                · {x.minutes} min break ended {formatTime(x.at)} · day total {formatHM(x.totalMinutes * 60_000)}
+                              </span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
                       <ul className="space-y-1 text-sm">
                         {r.sessions.map((s, i) => (
                           <li key={s.id} className="flex flex-wrap gap-x-4 text-muted">

@@ -1,5 +1,6 @@
 import { isValidObjectId } from "mongoose";
 import { DATE_RE, fail, json, route } from "@/lib/server/api";
+import { BREAK_REASON_MS, checkBreak, parseReason } from "@/lib/server/breaks";
 import { findOverlap, istToday, parseEntry } from "@/lib/server/manual";
 import { SESSION_FIELDS, toSession } from "@/lib/server/serialize";
 import { Attendance } from "@/models/Attendance";
@@ -8,6 +9,22 @@ import { User } from "@/models/User";
 // The UI reloads after every action and ignores what these return, so they answer { ok: true }
 // and ask the database for just _id (enough to know the update matched).
 const OK = () => json({ ok: true });
+
+const reasonRequired = (totalMs: number) =>
+  json(
+    {
+      error: `Your break today is ${Math.floor(totalMs / 60_000)} min, over the ${BREAK_REASON_MS / 60_000} min limit. Please give a reason.`,
+      code: "REASON_REQUIRED",
+    },
+    422,
+  );
+
+const longBreakEntry = (now: Date, chk: { thisBreakMs: number; totalMs: number }, reason: string) => ({
+  at: now,
+  minutes: Math.round(chk.thisBreakMs / 60_000),
+  totalMinutes: Math.round(chk.totalMs / 60_000),
+  reason,
+});
 
 /**
  * GET ?from=YYYY-MM-DD&to=YYYY-MM-DD[&userId=<id>|all]
@@ -72,9 +89,18 @@ export const POST = route(async (req, me) => {
       }
     }
     case "punchOut": {
+      // Punching out ends a running break too, so the same long-break rule applies.
+      const reason = parseReason(body.reason);
+      if (typeof reason === "object") return fail(reason.error);
+      const chk = await checkBreak(me.id, now);
+      if (chk?.needsReason && !reason) return reasonRequired(chk.totalMs);
       const s = await Attendance.findOneAndUpdate(
         mine,
-        { $set: { punchOut: now, "breaks.$[b].end": now }, $unset: { open: "" } },
+        {
+          $set: { punchOut: now, "breaks.$[b].end": now },
+          $unset: { open: "" },
+          ...(chk?.needsReason ? { $push: { longBreaks: longBreakEntry(now, chk, reason) } } : {}),
+        },
         { new: true, ...endOpenBreaks },
       )
         .select("_id")
@@ -94,11 +120,20 @@ export const POST = route(async (req, me) => {
     }
     case "endBreak": {
       if (!isValidObjectId(breakTarget)) return fail("Invalid userId");
+      // A day's break total over the limit needs a reason (from the employee, or from the admin ending it for them).
+      const reason = parseReason(body.reason);
+      if (typeof reason === "object") return fail(reason.error);
+      const chk = await checkBreak(breakTarget, now);
+      if (!chk?.onBreak) return fail("You are not on a break.", 409);
+      if (chk.needsReason && !reason) return reasonRequired(chk.totalMs);
       const s = await Attendance.findOneAndUpdate(
         // $elemMatch: true when some break has no end. A plain "breaks.end" $exists:false stops matching
         // as soon as any earlier break has ended, which made later breaks impossible to end.
         { ...theirs, breaks: { $elemMatch: { end: { $exists: false } } } },
-        { $set: { "breaks.$[b].end": now } },
+        {
+          $set: { "breaks.$[b].end": now },
+          ...(chk.needsReason ? { $push: { longBreaks: longBreakEntry(now, chk, reason) } } : {}),
+        },
         { new: true, ...endOpenBreaks },
       )
         .select("_id")

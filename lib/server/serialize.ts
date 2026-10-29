@@ -32,7 +32,7 @@ export const toUserListItem = (u: any): UserListItem => ({
 });
 
 /** Fields to select for toSession. */
-export const SESSION_FIELDS = "userId date punchIn punchOut breaks";
+export const SESSION_FIELDS = "userId date punchIn punchOut breaks longBreaks";
 
 export const toSession = (s: any): Session => {
   let breakMs = 0;
@@ -49,6 +49,16 @@ export const toSession = (s: any): Session => {
     punchOut: iso(s.punchOut),
     breakMs,
     breakStart,
+    ...(s.longBreaks?.length
+      ? {
+          longBreaks: s.longBreaks.map((l: any) => ({
+            at: iso(l.at)!,
+            minutes: l.minutes,
+            totalMinutes: l.totalMinutes,
+            reason: l.reason,
+          })),
+        }
+      : {}),
   };
 };
 

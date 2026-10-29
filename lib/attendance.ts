@@ -15,10 +15,15 @@ export const SHORT_DAY_MS = 4 * 3600_000;
  * Sessions for a date range (YYYY-MM-DD, inclusive). Open sessions are always included.
  * Admins can pass `userId` ("all" or an id); employees only ever receive their own.
  */
-export function useAttendance(range: { from: string; to: string; userId?: string }, refreshInterval = 0) {
-  const q = new URLSearchParams({ from: range.from, to: range.to });
-  if (range.userId) q.set("userId", range.userId);
-  const { data } = useSWR<{ sessions: Session[] }>(`/api/attendance?${q}`, api, {
+export function useAttendance(range: { from: string; to: string; userId?: string } | null, refreshInterval = 0) {
+  // A null range means "nothing to load yet" (SWR skips a null key).
+  let key: string | null = null;
+  if (range) {
+    const q = new URLSearchParams({ from: range.from, to: range.to });
+    if (range.userId) q.set("userId", range.userId);
+    key = `/api/attendance?${q}`;
+  }
+  const { data } = useSWR<{ sessions: Session[] }>(key, api, {
     keepPreviousData: true,
     refreshInterval,
   });
@@ -27,9 +32,15 @@ export function useAttendance(range: { from: string; to: string; userId?: string
 
 type Action = "punchIn" | "punchOut" | "startBreak" | "endBreak";
 
-/** Throws with the server's message on failure. Admins can pass `userId` to start/end a break for an employee. */
-export async function attendanceAction(action: Action, userId?: string) {
-  await api("/api/attendance", { method: "POST", body: { action, userId, date: dateKey(Date.now()) } });
+/** A day's total break above this needs a reason when the break ends. Keep equal to the server's value in lib/server/breaks.ts. (Testing value: 60 min; planned 70 min.) */
+export const BREAK_REASON_MS = 60 * 60_000;
+
+/**
+ * Throws with the server's message on failure. Admins can pass `userId` to start/end a break for an employee.
+ * `reason` is needed when ending a break (or punching out on one) that takes the day's total past the limit.
+ */
+export async function attendanceAction(action: Action, userId?: string, reason?: string) {
+  await api("/api/attendance", { method: "POST", body: { action, userId, reason, date: dateKey(Date.now()) } });
   await refresh("/api/attendance");
 }
 
@@ -97,7 +108,11 @@ export function summarizeDay(
   const weekend = dow === 0 || dow === 6;
   const onLeave = leaves.some((l) => l.status === "approved" && l.from <= date && date <= l.to);
   const isToday = date === dateKey(now);
-  const expected = weekend || onLeave ? 0 : DAY_TARGET_MS;
+  // Weekends expect nothing, so any work there is extra. An approved leave day also expects nothing
+  // unless the employee comes in anyway: then the work covers the day (a full day is "on target",
+  // not 8h of extra) and only time beyond 8h counts as extra. They are never marked short on a leave day.
+  const weekdayLeave = onLeave && !weekend;
+  const expected = weekend ? 0 : weekdayLeave ? Math.min(worked, DAY_TARGET_MS) : DAY_TARGET_MS;
 
   let status: DayStatus;
   if (sorted.length) {
@@ -105,9 +120,11 @@ export function summarizeDay(
       ? "Working"
       : worked >= DAY_TARGET_MS
         ? "Full day"
-        : worked >= SHORT_DAY_MS
-          ? "Short"
-          : "Very short";
+        : weekdayLeave
+          ? "On leave" // came in for part of an approved leave day
+          : worked >= SHORT_DAY_MS
+            ? "Short"
+            : "Very short";
   } else if (onLeave) status = "On leave";
   else if (weekend) status = "Weekend";
   else if (isToday) status = "Not in yet";

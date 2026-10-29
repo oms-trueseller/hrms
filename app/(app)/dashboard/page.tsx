@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import DayTable from "@/components/DayTable";
+import PunchCard from "@/components/PunchCard";
 import { PageHeader, Stat } from "@/components/ui";
 import {
   activeSession,
@@ -13,13 +14,13 @@ import {
   workedMs,
   breakMs,
   summarizeMonth,
-  BREAK_ALLOWED_MS,
-  DAY_TARGET_MS,
+  BREAK_REASON_MS,
 } from "@/lib/attendance";
 import { useAuth } from "@/lib/auth";
 import { useLeaveSpans } from "@/lib/leaves";
-import { errorMessage } from "@/lib/api";
-import { dateKey, formatClock, formatDelta, formatHM, formatLongDate, formatTime, hourIST, monthKey, addDays, weekday, useNow } from "@/lib/time";
+import { ApiError, errorMessage } from "@/lib/api";
+import ReasonDialog from "@/components/ReasonDialog";
+import { dateKey, formatDelta, formatHM, formatLongDate, formatTime, hourIST, monthKey, addDays, weekday, useNow } from "@/lib/time";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -34,17 +35,24 @@ export default function Dashboard() {
   const myLeaves = useLeaveSpans();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Set while the "why was the break long?" dialog is open.
+  const [ask, setAsk] = useState<"endBreak" | "punchOut" | null>(null);
 
   if (!user) return null;
   const active = activeSession(mine, user.id);
 
+  /** Runs a punch/break action. Ending a long break asks for a reason first. */
   async function act(a: Parameters<typeof attendanceAction>[0]) {
+    const endsBreak = a === "endBreak" || (a === "punchOut" && !!active && onBreak(active));
+    if (endsBreak && todayBreak > BREAK_REASON_MS && (a === "endBreak" || a === "punchOut")) return setAsk(a);
     setBusy(true);
     setError(null);
     try {
       await attendanceAction(a);
     } catch (e) {
-      setError(errorMessage(e));
+      // The server may judge the break slightly longer than the screen did.
+      if (e instanceof ApiError && e.code === "REASON_REQUIRED" && (a === "endBreak" || a === "punchOut")) setAsk(a);
+      else setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -59,10 +67,8 @@ export default function Dashboard() {
   const weekMs = mine.filter((s) => s.date >= weekStart).reduce((n, s) => n + workedMs(s, now), 0);
   const monthRows = buildMonth(monthKey(now), mine, myLeaves, now);
   const month = summarizeMonth(monthRows);
-  const remaining = Math.max(0, DAY_TARGET_MS - todayMs);
 
   const recent = buildMonth(monthKey(now), mine, myLeaves, now).slice(0, 7);
-  const progress = Math.min(100, (todayMs / DAY_TARGET_MS) * 100);
   const hour = hourIST(now);
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
@@ -73,56 +79,28 @@ export default function Dashboard() {
         subtitle={formatLongDate(now)}
       />
 
-      <section className="card mb-6 flex flex-col items-center gap-5 py-8 text-center">
-        <p className="text-sm font-medium text-muted">
-          {active
-            ? breaking
-              ? "On break"
-              : `Working since ${formatTime(active.punchIn)}`
-            : "You are punched out"}
-        </p>
-        <p
-          className={`font-mono text-6xl font-semibold tabular-nums tracking-tight sm:text-7xl ${
-            active && !breaking ? "text-accent" : ""
-          }`}
-          aria-live="off"
-        >
-          {formatClock(todayMs)}
-        </p>
-        <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-background">
-          <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progress}%` }} />
-        </div>
-        <p className="-mt-3 text-xs text-muted">
-          {formatHM(todayMs)} of 8h worked
-          {remaining > 0 ? ` · ${formatHM(remaining)} left` : " · target reached"}
-        </p>
-        <p className={`-mt-3 text-xs ${todayBreak > BREAK_ALLOWED_MS ? "font-medium text-amber-600" : "text-muted"}`}>
-          Break {formatHM(todayBreak)} of {formatHM(BREAK_ALLOWED_MS)} allowed
-          {todayBreak > BREAK_ALLOWED_MS && " · over the limit, extra break time is not counted as work"}
-        </p>
-
-        <div className="flex flex-wrap justify-center gap-3">
-          {!active ? (
-            <button disabled={busy} className="btn btn-primary px-8 py-3 text-base" onClick={() => act("punchIn")}>
-              Punch in
-            </button>
-          ) : (
-            <>
-              <button disabled={busy} className="btn btn-danger px-8 py-3 text-base" onClick={() => act("punchOut")}>
-                Punch out
-              </button>
-              <button
-                disabled={busy}
-                className="btn px-6 py-3 text-base"
-                onClick={() => act(breaking ? "endBreak" : "startBreak")}
-              >
-                {breaking ? "End break" : "Start break"}
-              </button>
-            </>
-          )}
-        </div>
-        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-      </section>
+      <PunchCard
+        state={!active ? "out" : breaking ? "break" : "working"}
+        since={active ? formatTime(active.punchIn) : undefined}
+        breakSince={active?.breakStart ? formatTime(active.breakStart) : undefined}
+        workedMs={todayMs}
+        breakMs={todayBreak}
+        busy={busy}
+        error={error}
+        reasons={todaySessions.flatMap((s) => s.longBreaks ?? [])}
+        onAction={act}
+      />
+      {ask && (
+        <ReasonDialog
+          totalMs={todayBreak}
+          confirmLabel={ask === "punchOut" ? "Punch out" : "End break"}
+          onSubmit={async (reason) => {
+            await attendanceAction(ask, undefined, reason);
+            setAsk(null);
+          }}
+          onClose={() => setAsk(null)}
+        />
+      )}
 
       <section className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Today" value={formatHM(todayMs)} hint={`${todaySessions.length} session(s)`} />

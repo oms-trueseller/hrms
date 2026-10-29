@@ -15,6 +15,14 @@ export interface User {
 /** Admin employee list: the fields that page shows (no phone). */
 export type UserListItem = Omit<User, "phone">;
 
+/** A reason given for a long break. */
+export interface LongBreak {
+  at: string; // ISO: when the break ended
+  minutes: number; // length of that break
+  totalMinutes: number; // the day's total break at that moment
+  reason: string;
+}
+
 /**
  * One punch-in/punch-out pair. A day can have several.
  * Breaks are sent as totals, not as a list: the UI only needs the time already taken and whether
@@ -30,6 +38,8 @@ export interface Session {
   breakMs: number;
   /** Start of the break running right now (ISO), if any. */
   breakStart?: string;
+  /** Reasons for long breaks. Only present when there are any. */
+  longBreaks?: LongBreak[];
 }
 
 export type LeaveType = "Casual" | "Sick" | "Paid" | "Unpaid";

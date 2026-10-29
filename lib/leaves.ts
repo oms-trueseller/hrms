@@ -2,7 +2,8 @@
 
 import useSWR from "swr";
 import { api, errorMessage, refresh } from "./api";
-import { parseKey } from "./time";
+import { DAY_TARGET_MS } from "./attendance";
+import { addDays, weekday } from "./time";
 import type { Leave, LeaveSpan, LeaveStatus, LeaveType } from "./types";
 
 export const LEAVE_TYPES: LeaveType[] = ["Casual", "Sick", "Paid", "Unpaid"];
@@ -24,8 +25,40 @@ export function useLeaveSpans(all = false) {
   return data?.leaves ?? [];
 }
 
-export function leaveDays(l: Pick<Leave, "from" | "to">): number {
-  return Math.round((parseKey(l.to).getTime() - parseKey(l.from).getTime()) / 86400000) + 1;
+/** Working days (Mon-Fri) a leave covers, as YYYY-MM-DD. Saturdays and Sundays are days off, not leave. */
+export function leaveDates(l: Pick<Leave, "from" | "to">): string[] {
+  const out: string[] = [];
+  for (let d = l.from, guard = 0; d <= l.to && guard < 400; d = addDays(d, 1), guard++) {
+    const w = weekday(d);
+    if (w !== 0 && w !== 6) out.push(d);
+  }
+  return out;
+}
+
+export const leaveDays = (l: Pick<Leave, "from" | "to">): number => leaveDates(l).length;
+
+export interface LeaveUsage {
+  /** Working days the leave covers. */
+  days: number;
+  /** Past leave days on which the employee still worked a full day. They are not counted as leave. */
+  returned: string[];
+  /** Days that count against the balance: days minus returned. */
+  counted: number;
+}
+
+/**
+ * How many days of an approved leave really count. A day the employee came in and worked a full
+ * day (8h, breaks excluded) was not taken off, so it is returned to their balance.
+ * `workedByDate` is net worked ms per day from finished sessions; `today` is the IST date.
+ */
+export function leaveUsage(
+  l: Pick<Leave, "from" | "to">,
+  workedByDate: Record<string, number>,
+  today: string,
+): LeaveUsage {
+  const dates = leaveDates(l);
+  const returned = dates.filter((d) => d <= today && (workedByDate[d] ?? 0) >= DAY_TARGET_MS);
+  return { days: dates.length, returned, counted: dates.length - returned.length };
 }
 
 /** Returns an error message, or null on success. */

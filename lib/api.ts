@@ -2,7 +2,14 @@
 
 import { mutate } from "swr";
 
-/** JSON fetch against our API; throws Error(message) on non-2xx. Also used as the SWR fetcher. */
+/** An API error. `code` is set when the server sends one (e.g. REASON_REQUIRED). */
+export class ApiError extends Error {
+  constructor(message: string, readonly code?: string) {
+    super(message);
+  }
+}
+
+/** JSON fetch against our API; throws ApiError on non-2xx. Also used as the SWR fetcher. */
 export async function api<T = unknown>(url: string, init?: { method?: string; body?: unknown }): Promise<T> {
   const res = await fetch(url, {
     method: init?.method ?? "GET",
@@ -10,7 +17,10 @@ export async function api<T = unknown>(url: string, init?: { method?: string; bo
     body: init?.body ? JSON.stringify(init.body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
+  if (!res.ok) {
+    const d = data as { error?: string; code?: string };
+    throw new ApiError(d.error ?? `Request failed (${res.status})`, d.code);
+  }
   return data as T;
 }
 

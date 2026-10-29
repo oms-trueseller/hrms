@@ -2,9 +2,18 @@
 
 import { useState } from "react";
 import AdminOnly from "@/components/AdminOnly";
+import ReasonDialog from "@/components/ReasonDialog";
 import { Badge, PageHeader } from "@/components/ui";
-import { activeSession, attendanceAction, breakMs, onBreak, useAttendance, workedMs } from "@/lib/attendance";
-import { errorMessage } from "@/lib/api";
+import {
+  activeSession,
+  attendanceAction,
+  BREAK_REASON_MS,
+  breakMs,
+  onBreak,
+  useAttendance,
+  workedMs,
+} from "@/lib/attendance";
+import { ApiError, errorMessage } from "@/lib/api";
 import { setRole, useAuth, useUsers } from "@/lib/auth";
 import { dateKey, formatClock, formatDate, formatHM, useNow } from "@/lib/time";
 
@@ -17,13 +26,19 @@ export default function EmployeesPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function breakAction(userId: string, action: "startBreak" | "endBreak") {
+  // Set while the "why was the break long?" dialog is open for an employee.
+  const [ask, setAsk] = useState<{ userId: string; name: string; totalMs: number } | null>(null);
+
+  async function breakAction(userId: string, name: string, action: "startBreak" | "endBreak", totalMs: number) {
+    // Ending a break that takes the day past the limit needs a reason; the admin writes it on their behalf.
+    if (action === "endBreak" && totalMs > BREAK_REASON_MS) return setAsk({ userId, name, totalMs });
     setBusyId(userId);
     setError(null);
     try {
       await attendanceAction(action, userId);
     } catch (e) {
-      setError(errorMessage(e));
+      if (e instanceof ApiError && e.code === "REASON_REQUIRED") setAsk({ userId, name, totalMs });
+      else setError(errorMessage(e));
     } finally {
       setBusyId(null);
     }
@@ -49,9 +64,10 @@ export default function EmployeesPage() {
           <tbody className="divide-y divide-border">
             {users.map((u) => {
               const active = activeSession(sessions, u.id);
-              const ms = sessions
-                .filter((s) => s.userId === u.id && s.date === today)
-                .reduce((n, s) => n + workedMs(s, now), 0);
+              const todays = sessions.filter((s) => s.userId === u.id && s.date === today);
+              const ms = todays.reduce((n, s) => n + workedMs(s, now), 0);
+              const breakTotal = todays.reduce((n, s) => n + breakMs(s, now), 0);
+              const reasons = todays.flatMap((s) => s.longBreaks ?? []);
               return (
                 <tr key={u.id}>
                   <td className="td">
@@ -67,11 +83,19 @@ export default function EmployeesPage() {
                   <td className="td whitespace-nowrap">
                     {active ? (
                       <div className="flex items-center gap-2">
-                        <span className="tabular-nums text-muted">{formatHM(breakMs(active, now))}</span>
+                        <span className="tabular-nums text-muted">{formatHM(breakTotal)}</span>
+                        {reasons.length > 0 && (
+                          <span
+                            className="cursor-help text-xs font-medium text-amber-600 dark:text-amber-400"
+                            title={reasons.map((r) => r.reason).join(" | ")}
+                          >
+                            reason
+                          </span>
+                        )}
                         <button
                           className="btn px-3 py-1"
                           disabled={busyId === u.id}
-                          onClick={() => breakAction(u.id, onBreak(active) ? "endBreak" : "startBreak")}
+                          onClick={() => breakAction(u.id, u.name, onBreak(active) ? "endBreak" : "startBreak", breakTotal)}
                         >
                           {onBreak(active) ? "End break" : "Start break"}
                         </button>
@@ -98,6 +122,18 @@ export default function EmployeesPage() {
           </tbody>
         </table>
       </section>
+      {ask && (
+        <ReasonDialog
+          totalMs={ask.totalMs}
+          who={ask.name}
+          confirmLabel="End break"
+          onSubmit={async (reason) => {
+            await attendanceAction("endBreak", ask.userId, reason);
+            setAsk(null);
+          }}
+          onClose={() => setAsk(null)}
+        />
+      )}
     </AdminOnly>
   );
 }
