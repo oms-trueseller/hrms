@@ -13,6 +13,7 @@ import {
   IconUser,
   IconUsers,
 } from "@/components/icons";
+import Loader from "@/components/Loader";
 import { logout, useAuth } from "@/lib/auth";
 
 const NAV = [
@@ -48,13 +49,13 @@ export default function Shell({ children }: { children: ReactNode }) {
     // in parallel with it instead of waiting for it. SWR shares the in-flight requests when it is shown.
     return (
       <>
-        <div className="grid flex-1 place-items-center text-sm text-muted">Loading…</div>
+        <Loader />
         {isClient && <div hidden>{children}</div>}
       </>
     );
   }
   if (!user) {
-    return <div className="grid flex-1 place-items-center text-sm text-muted">Loading…</div>;
+    return <Loader />;
   }
 
   const items = user.role === "admin" ? [...NAV, ...ADMIN_NAV] : NAV;
