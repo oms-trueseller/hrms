@@ -82,11 +82,12 @@ export const toLeave = (l: any, withUser = false): Leave => ({
 });
 
 /** Fields to select for toLeaveSpan. */
-export const LEAVE_SPAN_FIELDS = "from to status";
+export const LEAVE_SPAN_FIELDS = "from to status type";
 
 export const toLeaveSpan = (l: any, withUser = false): LeaveSpan => ({
   from: l.from,
   to: l.to,
   status: l.status,
+  type: l.type,
   ...(withUser ? { userId: String(l.userId) } : {}),
 });

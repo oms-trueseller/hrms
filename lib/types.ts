@@ -54,6 +54,8 @@ export interface LeaveSpan {
   status: LeaveStatus;
   /** Present on the admin all-employees list. */
   userId?: string;
+  /** Sent on the calendar view, so leave days can be counted by type. */
+  type?: LeaveType;
 }
 
 /** A leave request as listed on the Leaves pages. `userId` is only sent on the admin list. */

@@ -61,6 +61,44 @@ export function leaveUsage(
   return { days: dates.length, returned, counted: dates.length - returned.length };
 }
 
+export interface LeaveCount {
+  /** Leave days already taken (past working days that were not worked in full). */
+  taken: number;
+  /** Past leave days the employee worked a full day on, so they do not count. */
+  returned: number;
+  /** Approved leave days still ahead. */
+  upcoming: number;
+  /** `taken`, split by leave type. */
+  byType: Partial<Record<LeaveType, number>>;
+}
+
+/**
+ * Counts one employee's approved leave days that fall between `from` and `to` (YYYY-MM-DD, inclusive).
+ * Working days only (Mon-Fri); a day worked in full (8h) is returned, not counted.
+ */
+export function countLeaves(
+  leaves: LeaveSpan[],
+  from: string,
+  to: string,
+  today: string,
+  workedByDate: Record<string, number>,
+): LeaveCount {
+  const c: LeaveCount = { taken: 0, returned: 0, upcoming: 0, byType: {} };
+  for (const l of leaves) {
+    if (l.status !== "approved") continue;
+    for (const d of leaveDates(l)) {
+      if (d < from || d > to) continue;
+      if (d > today) c.upcoming++;
+      else if ((workedByDate[d] ?? 0) >= DAY_TARGET_MS) c.returned++;
+      else {
+        c.taken++;
+        if (l.type) c.byType[l.type] = (c.byType[l.type] ?? 0) + 1;
+      }
+    }
+  }
+  return c;
+}
+
 /** Returns an error message, or null on success. */
 export async function applyLeave(input: Pick<Leave, "type" | "from" | "to" | "reason">): Promise<string | null> {
   try {

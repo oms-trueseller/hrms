@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import type { UserListItem } from "@/lib/types";
 import AdminOnly from "@/components/AdminOnly";
+import EmployeeDetail from "@/components/EmployeeDetail";
 import ReasonDialog from "@/components/ReasonDialog";
 import { Badge, PageHeader } from "@/components/ui";
 import {
@@ -10,6 +12,7 @@ import {
   attendanceAction,
   BREAK_REASON_MS,
   breakMs,
+  DAY_TARGET_MS,
   onBreak,
   useAttendance,
   workedMs,
@@ -26,6 +29,8 @@ export default function EmployeesPage() {
   const { sessions } = useAttendance({ from: today, to: today, userId: "all" }, 15_000);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The employee whose full details panel is open.
+  const [detail, setDetail] = useState<UserListItem | null>(null);
 
   // Set while the "why was the break long?" dialog is open for an employee.
   const [ask, setAsk] = useState<{ userId: string; name: string; totalMs: number; action: "endBreak" | "punchOut" } | null>(null);
@@ -72,7 +77,7 @@ export default function EmployeesPage() {
               <th className="th">Department</th>
               <th className="th">Joined</th>
               <th className="th">Status</th>
-              <th className="th">Today</th>
+              <th className="th">Shift today</th>
               <th className="th">Break</th>
               <th className="th">Punch</th>
               <th className="th">Role</th>
@@ -88,15 +93,32 @@ export default function EmployeesPage() {
               return (
                 <tr key={u.id}>
                   <td className="td">
-                    <p className="font-medium">{u.name}</p>
-                    <p className="text-xs text-muted">{u.email}</p>
+                    <button
+                      className="text-left"
+                      onClick={() => setDetail(u)}
+                      title="Open shift details"
+                    >
+                      <p className="font-medium underline-offset-2 hover:text-accent hover:underline">{u.name}</p>
+                      <p className="text-xs text-muted">{u.email}</p>
+                    </button>
                   </td>
                   <td className="td">{[u.department, u.designation].filter(Boolean).join(" · ") || "—"}</td>
                   <td className="td">{formatDate(dateKey(u.joinedAt))}</td>
                   <td className="td">
                     {active ? <Badge tone={onBreak(active) ? "amber" : "green"}>{onBreak(active) ? "On break" : "Punched in"}</Badge> : <Badge tone="gray">Out</Badge>}
                   </td>
-                  <td className="td font-mono tabular-nums">{formatClock(ms)}</td>
+                  <td className="td">
+                    <p className="font-mono tabular-nums">{formatClock(ms)}</p>
+                    <p
+                      className={`text-xs tabular-nums ${
+                        ms > DAY_TARGET_MS ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted"
+                      }`}
+                    >
+                      {ms > DAY_TARGET_MS
+                        ? `OT +${formatHM(ms - DAY_TARGET_MS)}`
+                        : `${formatHM(DAY_TARGET_MS - ms)} left`}
+                    </p>
+                  </td>
                   <td className="td whitespace-nowrap">
                     {active ? (
                       <div className="flex items-center gap-2">
@@ -158,6 +180,7 @@ export default function EmployeesPage() {
           </tbody>
         </table>
       </section>
+      {detail && <EmployeeDetail employee={detail} onClose={() => setDetail(null)} />}
       {ask && (
         <ReasonDialog
           totalMs={ask.totalMs}

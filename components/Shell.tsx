@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import {
+  IconBriefcase,
   IconCalendar,
   IconCheckCircle,
   IconClipboard,
@@ -24,6 +25,7 @@ const NAV = [
 const ADMIN_NAV = [
   { href: "/admin/employees", label: "Employees", Icon: IconUsers },
   { href: "/admin/attendance", label: "All attendance", Icon: IconClipboard },
+  { href: "/admin/hours", label: "Monthly hours", Icon: IconBriefcase },
   { href: "/admin/leaves", label: "Leave approvals", Icon: IconCheckCircle },
 ];
 

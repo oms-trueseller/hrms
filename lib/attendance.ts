@@ -55,6 +55,13 @@ export function activeReasons(sessions: Session[], now: number): LongBreak[] {
   return total > BREAK_REASON_MS ? sessions.flatMap((s) => s.longBreaks ?? []) : [];
 }
 
+/** Net worked ms per day (IST date) from finished sessions. */
+export function workedByDate(sessions: Session[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const s of sessions) if (s.punchOut) out[s.date] = (out[s.date] ?? 0) + workedMs(s, 0);
+  return out;
+}
+
 export const activeSession = (sessions: Session[], userId: string) =>
   sessions.find((s) => s.userId === userId && !s.punchOut);
 
@@ -176,6 +183,17 @@ export function buildMonth(
     );
   }
   return rows;
+}
+
+/**
+ * Overtime building up right now: if the newest row is today and the person is still working past 8h,
+ * the hours beyond 8h. Finished days are already counted in `summarizeMonth().extraMs`; a day in progress
+ * is not, so admin views add this to show overtime as it happens.
+ */
+export function liveOvertimeMs(rows: DaySummary[], now: number): number {
+  const today = rows[0];
+  if (!today || today.date !== dateKey(now) || today.status !== "Working") return 0;
+  return Math.max(0, today.workedMs - DAY_TARGET_MS);
 }
 
 export interface MonthSummary {

@@ -23,10 +23,11 @@ const STATUS_TONE: Record<string, string> = {
   Weekend: "gray",
 };
 
-export function Badge({ children, tone }: { children: string; tone?: string }) {
+/** A small status chip. Words are capitalised unless `raw` is set (use it for text with times, e.g. "03:06 am"). */
+export function Badge({ children, tone, raw }: { children: string; tone?: string; raw?: boolean }) {
   const t = TONES[tone ?? STATUS_TONE[children] ?? "gray"];
   return (
-    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${t}`}>
+    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${raw ? "" : "capitalize"} ${t}`}>
       {children}
     </span>
   );
@@ -73,6 +74,7 @@ export function Stat({
   icon,
   color = "sky",
   tone,
+  compact,
 }: {
   label: string;
   value: string;
@@ -80,17 +82,27 @@ export function Stat({
   icon?: ReactNode;
   color?: BadgeColor;
   tone?: "good" | "bad";
+  /** Smaller card for tight spaces such as dialogs: smaller number and icon, value never wraps. */
+  compact?: boolean;
 }) {
   const valueColor =
     tone === "good" ? "text-emerald-600 dark:text-emerald-400" : tone === "bad" ? "text-rose-600 dark:text-rose-400" : "";
   return (
-    <div className="card flex items-start justify-between gap-3">
+    <div className={`card flex items-start justify-between gap-2 ${compact ? "p-4" : ""}`}>
       <div className="min-w-0">
         <p className="text-xs font-medium text-muted">{label}</p>
-        <p className={`mt-1 text-2xl font-semibold tabular-nums ${valueColor}`}>{value}</p>
+        <p className={`mt-1 font-semibold tabular-nums ${compact ? "whitespace-nowrap text-xl" : "text-2xl"} ${valueColor}`}>
+          {value}
+        </p>
         {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
       </div>
-      {icon && <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${BADGE[color]}`}>{icon}</span>}
+      {icon && (
+        <span
+          className={`grid shrink-0 place-items-center rounded-full ${compact ? "h-8 w-8 [&_svg]:h-4 [&_svg]:w-4" : "h-10 w-10"} ${BADGE[color]}`}
+        >
+          {icon}
+        </span>
+      )}
     </div>
   );
 }

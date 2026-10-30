@@ -9,6 +9,8 @@ import { PageHeader, SectionTitle, Stat } from "@/components/ui";
 import {
   activeSession,
   buildMonth,
+  summarizeDay,
+  type DaySummary,
   attendanceAction,
   onBreak,
   useAttendance,
@@ -82,7 +84,11 @@ export default function Dashboard() {
   const monthRows = buildMonth(monthKey(now), mine, myLeaves, now);
   const month = summarizeMonth(monthRows);
 
-  const recent = buildMonth(monthKey(now), mine, myLeaves, now).slice(0, 7);
+  // Only this week: Monday up to today, newest first. Built day by day so a week that spans two months still works.
+  const thisWeek: DaySummary[] = [];
+  for (let d = today; d >= weekStart; d = addDays(d, -1)) {
+    thisWeek.push(summarizeDay(d, mine.filter((s) => s.date === d), myLeaves, now));
+  }
   const hour = hourIST(now);
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
@@ -140,12 +146,12 @@ export default function Dashboard() {
 
       <section className="card p-0">
         <div className="flex items-center justify-between px-5 py-4">
-          <SectionTitle>Recent days</SectionTitle>
+          <SectionTitle>This week</SectionTitle>
           <Link href="/history" className="text-sm font-medium text-accent">
             Full history →
           </Link>
         </div>
-        <DayTable rows={recent} now={now} />
+        <DayTable rows={thisWeek} now={now} />
       </section>
     </>
   );
