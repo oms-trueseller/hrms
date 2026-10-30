@@ -15,14 +15,14 @@ import {
 } from "@/lib/attendance";
 import { useUsers } from "@/lib/auth";
 import { countLeaves, useLeaveSpans } from "@/lib/leaves";
-import { dateKey, formatDelta, formatHM, monthKey, useNow } from "@/lib/time";
+import { dateKey, formatDelta, formatHM, monthKey, SLOW_TICK, useNow } from "@/lib/time";
 import type { UserListItem } from "@/lib/types";
 
 type Sort = "name" | "worked" | "ot";
 
 /** Admin-only: every employee's hours for a month, with overtime and shortfall. */
 export default function MonthlyHoursPage() {
-  const now = useNow();
+  const now = useNow(true, SLOW_TICK); // hours are shown to the minute, so redraw rarely
   const users = useUsers();
   const leaves = useLeaveSpans(true);
   const [month, setMonth] = useState(() => monthKey(Date.now()));

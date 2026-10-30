@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui";
 import { summarizeDay, useAttendance, type DaySummary } from "@/lib/attendance";
 import { useUsers } from "@/lib/auth";
 import { useLeaveSpans } from "@/lib/leaves";
-import { addDays, dateKey, monthKey, parseKey, useNow, weekday } from "@/lib/time";
+import { addDays, dateKey, monthKey, parseKey, SLOW_TICK, useNow, weekday } from "@/lib/time";
 import type { LeaveSpan, Session } from "@/lib/types";
 
 /** The longest range shown at once (every employee x every day is a lot of rows). */
@@ -20,7 +20,7 @@ const daysBetween = (from: string, to: string) =>
 /** Everyone's attendance between two dates (today by default). Admin only. */
 export default function AllAttendancePage() {
   const users = useUsers();
-  const now = useNow();
+  const now = useNow(true, SLOW_TICK); // no seconds clock here; big tables, so redraw rarely
   const today = dateKey(now);
   const [from, setFrom] = useState(() => dateKey(Date.now()));
   const [to, setTo] = useState(() => dateKey(Date.now()));

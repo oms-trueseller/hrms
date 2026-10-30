@@ -70,9 +70,19 @@ export async function applyAutoBreakTo(docs: AutoBreakDoc[], now = new Date()): 
   }
 }
 
+// People already checked today, per server process. After the first check past the start time a new
+// session can only start after it, so it can never be due, and later clicks can skip the database call.
+// (Reading the attendance list still checks every session it loads, so an admin edit is caught there.)
+const checked = new Map<string, string>();
+
 /** Starts the automatic break for one user's (or everyone's) running sessions. Call before acting on a break. */
 export async function applyAutoBreakFor(userId: string | "all", now = new Date()): Promise<void> {
   const { today, start } = autoBreakWindow(now);
   if (now < start) return;
+  if (userId !== "all" && checked.get(userId) === today) return;
   await Attendance.updateMany({ ...pending(today, start), ...(userId === "all" ? {} : { userId }) }, startBreak(start));
+  if (userId !== "all") {
+    if (checked.size > 5000) checked.clear(); // bound memory
+    checked.set(userId, today);
+  }
 }

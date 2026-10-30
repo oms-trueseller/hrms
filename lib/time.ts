@@ -99,13 +99,19 @@ export function formatLongDate(ms: number): string {
   });
 }
 
-/** Ticks every second; returns the current epoch ms. */
-export function useNow(active = true): number {
+/** For pages that show times to the minute only: refresh every 30 s instead of every second. */
+export const SLOW_TICK = 30_000;
+
+/**
+ * The current epoch ms, refreshed every `intervalMs` (1 s by default). Every refresh re-draws the page that
+ * uses it, so pages with big tables and no seconds clock should pass a longer interval (see `SLOW_TICK`).
+ */
+export function useNow(active = true, intervalMs = 1000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
     return () => clearInterval(id);
-  }, [active]);
+  }, [active, intervalMs]);
   return now;
 }

@@ -10,7 +10,7 @@ import { errorMessage } from "@/lib/api";
 import type { Session } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import { useLeaveSpans } from "@/lib/leaves";
-import { dateKey, formatDelta, formatHM, formatTime, monthKey, useNow } from "@/lib/time";
+import { dateKey, formatDelta, formatHM, formatTime, monthKey, SLOW_TICK, useNow } from "@/lib/time";
 
 // Set to true to show the "+ Add / update entry" button for backfilling past days.
 const SHOW_ADD_ENTRY = false;
@@ -22,7 +22,7 @@ const SHOW_DELETE = false;
 
 export default function HistoryPage() {
   const { user } = useAuth();
-  const now = useNow();
+  const now = useNow(true, SLOW_TICK); // times are shown to the minute, so redraw rarely
   const [month, setMonth] = useState(() => monthKey(Date.now()));
   const { sessions } = useAttendance({ from: `${month}-01`, to: `${month}-31` });
   const leaves = useLeaveSpans();

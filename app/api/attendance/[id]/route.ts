@@ -64,6 +64,9 @@ export const PATCH = route(async (req, me, ctx: RouteContext<"/api/attendance/[i
           manual: true,
           ...(finishedBreak
             ? {
+                // Someone set the break time by hand, so it counts as handled: never add the automatic
+                // 1 pm break on top of it afterwards.
+                autoBreak: true,
                 breaks: {
                   $concatArrays: [
                     { $literal: finishedBreak },
